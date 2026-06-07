@@ -25,6 +25,15 @@ export default function App() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
 
+  // Generate permanent device ID for this browser if not yet exists
+  useEffect(() => {
+    let devId = localStorage.getItem('cbt_device_id');
+    if (!devId) {
+      devId = 'dev_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now().toString(36).slice(-5);
+      localStorage.setItem('cbt_device_id', devId);
+    }
+  }, []);
+
   // PWA Installation states
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
@@ -92,15 +101,15 @@ export default function App() {
 
   const handleCleanDraft = async () => {
     setIsCleaning('draft');
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-
+    
     try {
       const preservedKeys = [
         'cbt_current_user',
         'cbt_active_exam',
         'cbt_exam_answers',
         'cbt_violation_count',
-        'cbt_clean_icon_visible'
+        'cbt_clean_icon_visible',
+        'cbt_device_id'
       ];
       
       const keysToRemove: string[] = [];
@@ -114,12 +123,22 @@ export default function App() {
       keysToRemove.forEach(key => localStorage.removeItem(key));
       sessionStorage.clear();
       
+      // Reset state collections that could try to sync or write back
+      setStudents([]);
+      setExams([]);
+      setResults([]);
+      setActiveSessions([]);
+      
       setSuccessToast('Draft formulir berhasil dibersihkan! Memuat ulang...');
       setIsDiagnosticModalOpen(false);
       
       setTimeout(() => {
-        window.location.reload();
-      }, 800);
+        try {
+          window.location.replace(window.location.href);
+        } catch (e) {
+          window.location.reload();
+        }
+      }, 500);
     } catch (err) {
       console.error('Failed to clean draft:', err);
     } finally {
@@ -129,9 +148,16 @@ export default function App() {
 
   const handleResetTotal = async () => {
     setIsCleaning('total');
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
+    
     try {
+      // Clear React states FIRST so they do not write back during final render tick
+      setCurrentUser(null);
+      setActiveExam(null);
+      setStudents([]);
+      setExams([]);
+      setResults([]);
+      setActiveSessions([]);
+      
       localStorage.clear();
       sessionStorage.clear();
       
@@ -139,8 +165,12 @@ export default function App() {
       setIsDiagnosticModalOpen(false);
       
       setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+        try {
+          window.location.replace(window.location.origin + window.location.pathname);
+        } catch (e) {
+          window.location.reload();
+        }
+      }, 500);
     } catch (err) {
       console.error('Failed to reset application:', err);
     } finally {
@@ -644,6 +674,24 @@ export default function App() {
           s => (s.username.toLowerCase() === cleanUsername || s.nisn === cleanUsername) && s.password === cleanPassword
         );
         if (found) {
+          // --- SATU AKUN SATU PERANGKAT (SINGLE SESSION) CHECK ---
+          let currentDeviceId = localStorage.getItem('cbt_device_id');
+          if (!currentDeviceId) {
+            currentDeviceId = 'dev_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now().toString(36).slice(-5);
+            localStorage.setItem('cbt_device_id', currentDeviceId);
+          }
+
+          const activeSess = activeSessions.find(
+            (s) => s.studentId === found.id && s.status === 'working'
+          );
+
+          if (activeSess && activeSess.deviceSessionId && activeSess.deviceSessionId !== currentDeviceId) {
+            return {
+              success: false,
+              error: `Satu Akun Satu Perangkat: Sesi Anda terpantau sedang aktif mengerjakan ujian di perangkat lain. Mohon hubungi Guru / Proktor di ruang ujian Anda untuk melakukan 'Reset Sesi' terlebih dahulu agar Anda bisa masuk di perangkat ini.`
+            };
+          }
+
           return {
             success: true,
             user: { id: found.id, name: found.name, role: 'student', studentDetails: found }
@@ -699,26 +747,43 @@ export default function App() {
           snap = await getDocs(q);
         }
 
+        let docData: Student | null = null;
         if (!snap.empty) {
-          const docData = snap.docs[0].data() as Student;
-          if (docData.password.trim() === cleanPassword) {
-            const user: CurrentUser = {
-              id: docData.id,
-              name: docData.name,
-              role: 'student',
-              studentDetails: docData
-            };
-            return { success: true, user };
+          const possible = snap.docs[0].data() as Student;
+          if (possible.password?.trim() === cleanPassword) {
+            docData = possible;
           }
+        } else if (cleanUsername === 'janur' && cleanPassword === '123') {
+          docData = defaultStudents[0];
+          setDoc(doc(db, 'students', docData.id), docData).catch(console.error);
         }
 
-        if (cleanUsername === 'janur' && cleanPassword === '123') {
-          const defaultJanur = defaultStudents[0];
-          setDoc(doc(db, 'students', defaultJanur.id), defaultJanur).catch(console.error);
-          return {
-            success: true,
-            user: { id: defaultJanur.id, name: defaultJanur.name, role: 'student', studentDetails: defaultJanur }
+        if (docData) {
+          // --- SATU AKUN SATU PERANGKAT (SINGLE SESSION) CHECK ---
+          let currentDeviceId = localStorage.getItem('cbt_device_id');
+          if (!currentDeviceId) {
+            currentDeviceId = 'dev_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now().toString(36).slice(-5);
+            localStorage.setItem('cbt_device_id', currentDeviceId);
+          }
+
+          const activeSess = activeSessions.find(
+            (s) => s.studentId === docData!.id && s.status === 'working'
+          );
+
+          if (activeSess && activeSess.deviceSessionId && activeSess.deviceSessionId !== currentDeviceId) {
+            return {
+              success: false,
+              error: `Satu Akun Satu Perangkat: Sesi Anda terpantau sedang aktif mengerjakan ujian di perangkat lain. Mohon hubungi Guru / Proktor di ruang ujian Anda untuk melakukan 'Reset Sesi' terlebih dahulu agar Anda bisa masuk di perangkat ini.`
+            };
+          }
+
+          const user: CurrentUser = {
+            id: docData.id,
+            name: docData.name,
+            role: 'student',
+            studentDetails: docData
           };
+          return { success: true, user };
         }
 
         return { success: false, error: 'Username/NISN atau Password siswa salah. Pastikan sudah didaftarkan.' };

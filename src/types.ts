@@ -59,6 +59,7 @@ export interface ActiveSession {
   lastActive?: number;
   status?: 'working' | 'force_submitted' | 'paused' | 'cheat_submitted';
   violationsCount?: number;
+  deviceSessionId?: string;
 }
 
 export interface ExamResult {

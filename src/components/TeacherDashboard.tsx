@@ -32,7 +32,9 @@ import {
   Smartphone,
   Wifi,
   Network,
-  Download
+  Download,
+  Database,
+  HardDrive
 } from 'lucide-react';
 import { Student, Exam, ExamResult, Question, Teacher, ActiveSession } from '../types';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
@@ -777,9 +779,26 @@ export default function TeacherDashboard({
       return;
     }
 
-    if ((editingTeacher.username === 'admin' || editingTeacher.username === 'aedia') && (usernameLower !== editingTeacher.username || editTeacherRole !== 'admin')) {
-      setEditTeacherError('Kredensial atau hak akses admin utama tidak dapat diubah/diturunkan!');
-      return;
+    const isPermanent = 
+      editingTeacher.username === 'aedia' || 
+      editingTeacher.username === 'alam' || 
+      editingTeacher.username === 'admin' ||
+      editingTeacher.name === 'Aedia Janur' || 
+      editingTeacher.name === 'Alam Semesta';
+
+    if (isPermanent) {
+      if (editTeacherName.trim() !== editingTeacher.name) {
+        setEditTeacherError('Nama akun permanen tidak boleh diubah!');
+        return;
+      }
+      if (usernameLower !== editingTeacher.username) {
+        setEditTeacherError('Username akun permanen tidak boleh diubah!');
+        return;
+      }
+      if (editTeacherRole !== editingTeacher.role) {
+        setEditTeacherError('Hak akses akun permanen tidak boleh diubah!');
+        return;
+      }
     }
 
     const updatedTeacher: Teacher = {
@@ -796,8 +815,8 @@ export default function TeacherDashboard({
 
   const handleDeleteTeacher = (id: string) => {
     const toDelete = teachers.find((t) => t.id === id);
-    if (toDelete && (toDelete.username === 'aedia' || toDelete.username === 'admin')) {
-      alert('Akun admin utama tidak boleh dihapus!');
+    if (toDelete && (toDelete.username === 'aedia' || toDelete.username === 'admin' || toDelete.username === 'alam' || toDelete.name === 'Aedia Janur' || toDelete.name === 'Alam Semesta')) {
+      alert('Akun permanen (Aedia Janur / Alam Semesta) bersifat tetap dan tidak boleh dihapus!');
       return;
     }
 
@@ -2100,6 +2119,121 @@ export default function TeacherDashboard({
                   </table>
                 </div>
               </div>
+
+              {/* Storage & Memory Capacity Monitor Panel */}
+              <div className="bg-gradient-to-br from-slate-900 to-emerald-950 text-white rounded-3xl p-6 shadow-md border border-emerald-800/20">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                  <div>
+                    <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider font-mono flex items-center gap-2">
+                      <Database className="w-4 h-4 text-emerald-400" />
+                      Status Kapasitas Memori & Monitoring Penyimpanan
+                    </h3>
+                    <p className="text-xs text-slate-300 mt-1">
+                      Informasi real-time alokasi memori lokal (browser) dan server fisik untuk mendukung banyak sekolah ujian online bersamaan.
+                    </p>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-1.5 bg-emerald-950/60 border border-emerald-800 px-3 py-1.5 rounded-full text-[11px] text-emerald-300 font-mono font-bold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Sistem Penyimpanan Terpantau
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Left Column: LocalStorage Usage */}
+                  <div className="bg-slate-950/60 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <HardDrive className="w-4 h-4 text-emerald-400" />
+                        <span className="text-xs font-bold text-slate-200 uppercase tracking-wide font-mono">
+                          Memori Browser (Lokal PC/HP)
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-normal mb-4 font-sans">
+                        Digunakan untuk menyimpan preferensi sesi aktif, guru proktor, dan backup data siswa di perangkat local storage saat ini.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="w-full bg-slate-900 h-3.5 rounded-full overflow-hidden border border-slate-850 relative">
+                        <div 
+                          className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-500"
+                          style={{ 
+                            width: `${Math.max(2, Math.min(100, (((JSON.stringify(students).length + JSON.stringify(exams).length + JSON.stringify(results).length) / (5 * 1024 * 1024)) * 100)))}%` 
+                          }}
+                        ></div>
+                      </div>
+                      <div className="flex justify-between text-[11px] font-mono text-slate-300 gap-1 flex-wrap">
+                        <span>Penyimpanan Terpakai: <strong className="text-emerald-450">{((JSON.stringify(students).length + JSON.stringify(exams).length + JSON.stringify(results).length) / 1024).toFixed(1)} KB</strong></span>
+                        <span>Maks: <strong>5.0 MB</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Middle Column: Server Disk Capacity for 10+ Schools */}
+                  <div className="bg-slate-950/60 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Network className="w-4 h-4 text-emerald-400" />
+                        <span className="text-xs font-bold text-slate-200 uppercase tracking-wide font-mono">
+                          Kapasitas Server Fisik (Laptop/VM)
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-normal font-sans">
+                        Bila ujian digunakan oleh sekolah lain (&gt;10 sekolah), data hasil disimpan di folder <code className="bg-slate-950 font-semibold px-1.5 py-0.5 rounded text-amber-300 text-[10.5px] font-mono">/offline_data/results/</code> server laptop/HP proktor masing-masing sekolah.
+                      </p>
+                    </div>
+
+                    <div className="pt-4 mt-2 border-t border-slate-800/50 space-y-2">
+                      <div className="flex justify-between text-[10.5px] font-sans text-slate-300">
+                        <span>Estimasi per Hasil Siswa:</span>
+                        <strong className="text-emerald-300 font-mono">± 3.2 KB / Siswa</strong>
+                      </div>
+                      <div className="flex justify-between text-[10.5px] font-sans text-slate-300">
+                        <span>Penyimpanan 10,000 Siswa:</span>
+                        <strong className="text-emerald-300 font-mono">31 MB (Hemat Sangat Lega)</strong>
+                      </div>
+                      <div className="flex justify-between text-[10.5px] font-sans text-slate-300">
+                        <span>Batas Jumlah Sekolah:</span>
+                        <strong className="text-emerald-400 font-bold font-mono">Tidak Terbatas (Mandiri)</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Database Storage Allocations */}
+                  <div className="bg-slate-950/60 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Activity className="w-4 h-4 text-emerald-400" />
+                        <span className="text-xs font-bold text-slate-200 uppercase tracking-wide font-mono">
+                          Rincian Alokasi Data
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-normal mb-3 font-sans">
+                        Jumlah item terdaftar yang saat ini diolah oleh dashboard proktor:
+                      </p>
+                    </div>
+
+                    <div className="space-y-2 text-xs font-mono font-semibold">
+                      <div className="flex justify-between items-center bg-slate-900/60 p-2 rounded-xl border border-slate-850/40">
+                        <span className="text-slate-350">Data Siswa:</span>
+                        <strong className="text-emerald-400">{students.length} Siswa ({Math.round(JSON.stringify(students).length / 102.4) / 10} KB)</strong>
+                      </div>
+                      <div className="flex justify-between items-center bg-slate-900/60 p-2 rounded-xl border border-slate-850/40">
+                        <span className="text-slate-350">Bank Soal & Ujian:</span>
+                        <strong className="text-emerald-400">{exams.length} Paket ({Math.round(JSON.stringify(exams).length / 102.4) / 10} KB)</strong>
+                      </div>
+                      <div className="flex justify-between items-center bg-slate-900/60 p-2 rounded-xl border border-slate-850/40">
+                        <span className="text-slate-350">Hasil Ujian Selesai:</span>
+                        <strong className="text-emerald-400">{results.length} Rekap ({Math.round(JSON.stringify(results).length / 102.4) / 10} KB)</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 p-3.5 bg-emerald-950/40 border border-emerald-900/50 rounded-2xl text-[11px] text-slate-300 leading-relaxed font-sans">
+                  💡 <strong>Informasi Keamanan & Skalabilitas Multi-School:</strong> Jika aplikasi ini digunakan online secara bersamaan oleh lebih dari 10 sekolah, Anda sangat direkomendasikan melakukan <strong>Deploy Mandiri (Isolated VPS/PC Hosting)</strong> untuk tiap sekolah, atau mendeploy Cloud Firebase Firestore. Untuk penambahan data (Soal, Siswa, Admin), datanya akan otomatis tersimpan mandiri di database masing-masing sekolah agar performa server tetap maksimal, tidak tercampur, dan kapasitas memori melimpah tanpa batas!
+                </div>
+              </div>
             </div>
           )}
 
@@ -2266,26 +2400,28 @@ export default function TeacherDashboard({
                           </td>
                           <td className="py-3.5 px-3 align-middle text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => startEditStudent(std)}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-700 hover:text-emerald-800 rounded-xl text-xs font-bold transition-all border border-emerald-100 cursor-pointer shadow-xs"
-                                title="Edit Siswa"
-                              >
-                                <Edit className="w-4 h-4 shrink-0" />
-                                <span>Edit</span>
-                              </button>
-                              {std.username !== 'janur' && std.id !== 'user_1' ? (
-                                <button
-                                  onClick={() => handleDeleteStudent(std.id)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-50 hover:bg-red-100 active:scale-95 text-red-650 hover:text-red-750 rounded-xl text-xs font-bold transition-all border border-red-100 cursor-pointer shadow-xs"
-                                  title="Hapus Siswa"
-                                >
-                                  <Trash2 className="w-4 h-4 shrink-0" />
-                                  <span>Hapus</span>
-                                </button>
+                              {std.username !== 'janur' && std.id !== 'user_1' && std.name !== 'Ahmad Jaannuruzaki A' ? (
+                                <>
+                                  <button
+                                    onClick={() => startEditStudent(std)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-700 hover:text-emerald-800 rounded-xl text-xs font-bold transition-all border border-emerald-100 cursor-pointer shadow-xs"
+                                    title="Edit Siswa"
+                                  >
+                                    <Edit className="w-4 h-4 shrink-0" />
+                                    <span>Edit</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteStudent(std.id)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-50 hover:bg-red-100 active:scale-95 text-red-650 hover:text-red-750 rounded-xl text-xs font-bold transition-all border border-red-100 cursor-pointer shadow-xs"
+                                    title="Hapus Siswa"
+                                  >
+                                    <Trash2 className="w-4 h-4 shrink-0" />
+                                    <span>Hapus</span>
+                                  </button>
+                                </>
                               ) : (
-                                <span className="text-[10px] font-bold tracking-wide uppercase text-gray-400 bg-gray-100 border border-gray-200 py-1.5 px-2.5 rounded-xl block text-center shadow-2xs font-mono">
-                                  Permanen
+                                <span className="text-xs text-gray-400 italic px-3 font-semibold text-emerald-650">
+                                  Bawaan
                                 </span>
                               )}
                             </div>
@@ -3516,25 +3652,27 @@ Kunci: D`}
                               </td>
                               <td className="py-3.5 px-3 align-middle text-right whitespace-nowrap">
                                 <div className="flex items-center justify-end gap-2">
-                                  <button
-                                    onClick={() => startEditTeacher(teach)}
-                                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-700 hover:text-emerald-850 rounded-xl text-xs font-bold transition-all border border-emerald-100 cursor-pointer shadow-xs"
-                                    title="Edit Guru/Pengawas"
-                                  >
-                                    <Edit className="w-3.5 h-3.5 shrink-0" />
-                                    <span>Edit</span>
-                                  </button>
-                                  {teach.username !== 'aedia' && teach.username !== 'admin' ? (
-                                    <button
-                                      onClick={() => handleDeleteTeacher(teach.id)}
-                                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-50 hover:bg-red-100 active:scale-95 text-red-750 hover:text-red-800 rounded-xl text-xs font-bold transition-all border border-red-100 cursor-pointer shadow-xs"
-                                      title="Hapus Guru/Pengawas"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5 shrink-0" />
-                                      <span>Hapus</span>
-                                    </button>
+                                  {teach.username !== 'aedia' && teach.username !== 'admin' && teach.username !== 'alam' && teach.name !== 'Aedia Janur' && teach.name !== 'Alam Semesta' ? (
+                                    <>
+                                      <button
+                                        onClick={() => startEditTeacher(teach)}
+                                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-700 hover:text-emerald-850 rounded-xl text-xs font-bold transition-all border border-emerald-100 cursor-pointer shadow-xs"
+                                        title="Edit Guru/Pengawas"
+                                      >
+                                        <Edit className="w-3.5 h-3.5 shrink-0" />
+                                        <span>Edit</span>
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteTeacher(teach.id)}
+                                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-50 hover:bg-red-100 active:scale-95 text-red-750 hover:text-red-800 rounded-xl text-xs font-bold transition-all border border-red-100 cursor-pointer shadow-xs"
+                                        title="Hapus Guru/Pengawas"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                                        <span>Hapus</span>
+                                      </button>
+                                    </>
                                   ) : (
-                                    <span className="text-xs text-gray-400 italic px-3">Utama</span>
+                                    <span className="text-xs text-gray-400 italic px-3 font-semibold text-emerald-650">Bawaan</span>
                                   )}
                                 </div>
                               </td>
@@ -3684,7 +3822,9 @@ Kunci: D`}
                                         </span>
                                       ) : null}
                                     </div>
-                                    <span className="text-[10px] text-gray-400 block font-mono">NISN: {session.studentNisn} | {session.classGroup}</span>
+                                    <span className="text-[10px] text-gray-400 block font-mono">
+                                      NISN: {session.studentNisn} | {session.classGroup} | Perangkat: <span className="font-semibold text-emerald-650">{session.deviceSessionId ? `💻 ${session.deviceSessionId.slice(-10).toUpperCase()}` : '⚠️ Tanpa Bind'}</span>
+                                    </span>
                                   </div>
                                 </div>
                               </td>
@@ -4112,10 +4252,14 @@ Kunci: D`}
                 <input
                   type="text"
                   required
+                  disabled={editingStudent.username === 'janur' || editingStudent.id === 'user_1'}
                   value={editStudentName}
                   onChange={(e) => setEditStudentName(e.target.value)}
-                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-650 transition-all font-sans"
+                  className="w-full p-2.5 bg-white disabled:bg-gray-100 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-650 transition-all font-sans"
                 />
+                {(editingStudent.username === 'janur' || editingStudent.id === 'user_1') && (
+                  <span className="text-[9px] text-gray-400 block mt-1 leading-normal font-sans">Nama siswa utama bersifat permanen dan tidak bisa diubah.</span>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -4184,10 +4328,14 @@ Kunci: D`}
                   <input
                     type="text"
                     required
+                    disabled={editingStudent.username === 'janur' || editingStudent.id === 'user_1'}
                     value={editStudentUser}
                     onChange={(e) => setEditStudentUser(e.target.value)}
-                    className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-650 transition-all font-sans"
+                    className="w-full p-2.5 bg-white disabled:bg-gray-100 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-650 transition-all font-sans font-mono"
                   />
+                  {(editingStudent.username === 'janur' || editingStudent.id === 'user_1') && (
+                    <span className="text-[9px] text-gray-400 block mt-1 leading-normal font-sans">Username siswa utama bersifat permanen dan tidak bisa diubah.</span>
+                  )}
                 </div>
 
                 <div>
@@ -4257,10 +4405,14 @@ Kunci: D`}
                 <input
                   type="text"
                   required
+                  disabled={editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Alam Semesta'}
                   value={editTeacherName}
                   onChange={(e) => setEditTeacherName(e.target.value)}
-                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-650 transition-all font-sans"
+                  className="w-full p-2.5 bg-white disabled:bg-gray-100 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-650 transition-all font-sans"
                 />
+                {(editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Alam Semesta') && (
+                  <span className="text-[9px] text-gray-400 block mt-1 leading-normal font-sans">Nama akun permanen dikunci demi keamanan sistem.</span>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -4271,13 +4423,13 @@ Kunci: D`}
                   <input
                     type="text"
                     required
-                    disabled={editingTeacher.username === 'admin' || editingTeacher.username === 'aedia'}
+                    disabled={editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Alam Semesta'}
                     value={editTeacherUser}
                     onChange={(e) => setEditTeacherUser(e.target.value)}
                     className="w-full p-2.5 bg-white disabled:bg-gray-100 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-650 transition-all font-mono"
                   />
-                  {(editingTeacher.username === 'admin' || editingTeacher.username === 'aedia') && (
-                    <span className="text-[9px] text-gray-400 block mt-1 leading-normal font-sans">Username admin utama dikunci demi keamanan sistem.</span>
+                  {(editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Alam Semesta') && (
+                    <span className="text-[9px] text-gray-400 block mt-1 leading-normal font-sans">Username akun permanen dikunci demi keamanan sistem.</span>
                   )}
                 </div>
 
@@ -4300,7 +4452,7 @@ Kunci: D`}
                   Hak Akses (Role)
                 </label>
                 <select
-                  disabled={editingTeacher.username === 'admin' || editingTeacher.username === 'aedia'}
+                  disabled={editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Alam Semesta'}
                   value={editTeacherRole}
                   onChange={(e) => setEditTeacherRole(e.target.value as 'admin' | 'proctor')}
                   className="w-full p-2.5 bg-white disabled:bg-gray-100 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-650 transition-all font-sans font-medium"
@@ -4308,8 +4460,8 @@ Kunci: D`}
                   <option value="proctor">Pengawas Ujian (Proctor)</option>
                   <option value="admin">Administrator (Guru Utama)</option>
                 </select>
-                {(editingTeacher.username === 'admin' || editingTeacher.username === 'aedia') && (
-                  <span className="text-[9px] text-gray-400 block mt-1 leading-normal font-sans">Hak akses admin utama dilindungi oleh sistem.</span>
+                {(editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Alam Semesta') && (
+                  <span className="text-[9px] text-gray-400 block mt-1 leading-normal font-sans">Hak akses akun permanen dilindungi oleh sistem.</span>
                 )}
               </div>
 

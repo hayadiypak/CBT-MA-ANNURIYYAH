@@ -192,7 +192,7 @@ export default function Login({ onLoginAttempt, onLoginSuccess }: LoginProps) {
           <div className="inline-flex items-center gap-1.5 p-2 px-3 bg-amber-50 border border-amber-100 text-[11px] text-amber-800 rounded-xl leading-relaxed">
             <Sparkles className="w-3.5 h-3.5 shrink-0" />
             <span>
-              <strong>Info Akun Demo:</strong> Siswa: <code className="bg-amber-100 px-1 rounded font-bold">Janur</code> / <code className="bg-amber-100 px-1 rounded">123</code> | Admin: <code className="bg-amber-100 px-1 rounded font-bold">Aedia</code> / <code className="bg-amber-100 px-1 rounded">aedia</code>
+              <strong>Info Akun Demo:</strong> Siswa: <code className="bg-amber-100 px-1 rounded font-bold">Janur</code> / <code className="bg-amber-100 px-1 rounded">123</code> | Proctor: <code className="bg-amber-100 px-1 rounded font-bold">Alam</code> / <code className="bg-amber-100 px-1 rounded">Semesta</code> | Admin: <code className="bg-amber-100 px-1 rounded font-bold">Aedia</code> / <code className="bg-amber-100 px-1 rounded">aedia</code>
             </span>
           </div>
         </div>

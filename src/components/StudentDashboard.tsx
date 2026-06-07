@@ -141,6 +141,15 @@ export default function StudentDashboard({
                 </div>
               </div>
 
+              <div className="p-3.5 bg-gray-50 rounded-2xl flex flex-col">
+                <span className="text-[11px] font-semibold text-gray-400 uppercase flex items-center gap-1">
+                  💻 ID Perangkat Ujian (Binaan)
+                </span>
+                <span className="text-xs font-bold text-gray-600 mt-1 font-mono bg-white border border-gray-150 px-2.5 py-1 rounded-xl w-max uppercase select-all">
+                  {localStorage.getItem('cbt_device_id')?.slice(-10).toUpperCase() || 'MENGASOSIASIKAN...'}
+                </span>
+              </div>
+
               <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-start gap-2.5">
                 <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
                 <div className="text-xs text-emerald-800 leading-relaxed">

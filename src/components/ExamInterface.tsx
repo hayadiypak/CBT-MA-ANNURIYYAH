@@ -207,7 +207,8 @@ export default function ExamInterface({ student, exam, onFinishExam, onCancel, e
         lastActive: now,
         status: violationCount >= 3 ? 'cheat_submitted' : 'working',
         answers: answers,
-        violationsCount: violationCount
+        violationsCount: violationCount,
+        deviceSessionId: localStorage.getItem('cbt_device_id') || 'unknown'
       };
 
       if (examMode === 'offline') {
@@ -326,7 +327,8 @@ export default function ExamInterface({ student, exam, onFinishExam, onCancel, e
           lastActive: now,
           status: nextCount >= 3 ? 'cheat_submitted' : 'working',
           answers: answersRef.current,
-          violationsCount: nextCount
+          violationsCount: nextCount,
+          deviceSessionId: localStorage.getItem('cbt_device_id') || 'unknown'
         };
 
         if (examMode === 'offline') {
