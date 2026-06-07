@@ -1,0 +1,131 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Siswa yang terdaftar dalam ujian CBT",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "name": { "type": "string" },
+        "nisn": { "type": "string" },
+        "gender": { "type": "string" },
+        "classGroup": { "type": "string" },
+        "password": { "type": "string" }
+      },
+      "required": ["id", "username", "name", "nisn", "gender", "classGroup", "password"]
+    },
+    "Teacher": {
+      "title": "Teacher",
+      "description": "Guru/Pengawas yang mengelola ujian CBT",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "name": { "type": "string" },
+        "password": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "proctor"] }
+      },
+      "required": ["id", "username", "name", "password", "role"]
+    },
+    "Exam": {
+      "title": "Exam",
+      "description": "Paket soal ujian CBT",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "subject": { "type": "string" },
+        "durationMinutes": { "type": "number" },
+        "token": { "type": "string" },
+        "questions": { "type": "array" },
+        "isActive": { "type": "boolean" },
+        "targetClass": { "type": "string" }
+      },
+      "required": ["id", "title", "subject", "durationMinutes", "token", "questions", "isActive"]
+    },
+    "ExamResult": {
+      "title": "ExamResult",
+      "description": "Daftar nilai hasil pengerjaan ujian siswa",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "studentNisn": { "type": "string" },
+        "classGroup": { "type": "string" },
+        "examId": { "type": "string" },
+        "examTitle": { "type": "string" },
+        "examSubject": { "type": "string" },
+        "totalQuestions": { "type": "number" },
+        "correctCount": { "type": "number" },
+        "score": { "type": "number" },
+        "completedTime": { "type": "number" }
+      },
+      "required": [
+        "id",
+        "studentId",
+        "studentName",
+        "studentNisn",
+        "classGroup",
+        "examId",
+        "examTitle",
+        "examSubject",
+        "totalQuestions",
+        "correctCount",
+        "score",
+        "completedTime"
+      ]
+    },
+    "ActiveSession": {
+      "title": "ActiveSession",
+      "description": "Sesi ujian aktif siswa terdeteksi real-time",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "examId": { "type": "string" },
+        "startTime": { "type": "number" },
+        "answers": { "type": "object" },
+        "isCompleted": { "type": "boolean" },
+        "completedTime": { "type": "number" },
+        "score": { "type": "number" },
+        "studentName": { "type": "string" },
+        "studentNisn": { "type": "string" },
+        "classGroup": { "type": "string" },
+        "examTitle": { "type": "string" },
+        "examSubject": { "type": "string" },
+        "timeLeft": { "type": "number" },
+        "totalQuestions": { "type": "number" },
+        "answeredCount": { "type": "number" },
+        "unansweredCount": { "type": "number" },
+        "doubtfulCount": { "type": "number" },
+        "lastActive": { "type": "number" },
+        "status": { "type": "string", "enum": ["working", "force_submitted", "paused"] }
+      },
+      "required": ["id", "studentId", "examId"]
+    }
+  },
+  "firestore": {
+    "students/{studentId}": {
+      "schema": "Student",
+      "description": "Koleksi data siswa terdaftar"
+    },
+    "teachers/{teacherId}": {
+      "schema": "Teacher",
+      "description": "Koleksi data guru dan pengawas"
+    },
+    "exams/{examId}": {
+      "schema": "Exam",
+      "description": "Koleksi paket ujian CBT"
+    },
+    "results/{resultId}": {
+      "schema": "ExamResult",
+      "description": "Koleksi hasil nilai ujian siswa"
+    },
+    "active_sessions/{sessionId}": {
+      "schema": "ActiveSession",
+      "description": "Sesi ujian aktif real-time siswa"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global safety net catches any undefined paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 1. Students collection
+    match /students/{studentId} {
+      allow read, write: if true;
+    }
+
+    // 2. Teachers / Proctors collection
+    match /teachers/{teacherId} {
+      allow read, write: if true;
+    }
+
+    // 3. Exams collection
+    match /exams/{examId} {
+      allow read, write: if true;
+    }
+
+    // 4. Exam results collection
+    match /results/{resultId} {
+      allow read, write: if true;
+    }
+
+    // 5. Active sessions collection
+    match /active_sessions/{sessionId} {
+      allow read, write: if true;
+    }
+  }
+}

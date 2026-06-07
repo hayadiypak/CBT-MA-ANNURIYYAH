@@ -1,0 +1,6 @@
+{
+  "name": "CBT MA Annuriyyah",
+  "description": "Aplikasi Computer Based Test (CBT) MA Annuriyyah dengan fitur simulasi ujian UNBK, pengelolaan bank soal, manajemen data siswa, dan grafik rekap hasil ujian.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
