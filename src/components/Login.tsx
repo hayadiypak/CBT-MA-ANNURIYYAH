@@ -2,7 +2,7 @@ import { useState, FormEvent } from 'react';
 import { LogIn, KeyRound, User, Users, GraduationCap, AlertCircle, Sparkles } from 'lucide-react';
 import { Student, Teacher } from '../types';
 // @ts-ignore
-import logoImg from '../assets/images/ma_logo_clean_1780675707006.png';
+import logoImg from '../assets/images/cbt_ma_annuriyyah_logo_1780701928746.png';
 
 interface LoginProps {
   onLoginAttempt: (

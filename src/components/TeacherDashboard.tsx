@@ -10,13 +10,13 @@ import {
   Edit,
   RotateCw,
   Eye,
+  EyeOff,
   Settings,
   CheckCircle,
   XCircle,
   TrendingUp,
   Sliders,
   LogOut,
-  Sparkles,
   ChevronRight,
   ClipboardList,
   AlertCircle,
@@ -34,13 +34,15 @@ import {
   Network,
   Download,
   Database,
-  HardDrive
+  HardDrive,
+  Search,
+  Printer
 } from 'lucide-react';
 import { Student, Exam, ExamResult, Question, Teacher, ActiveSession } from '../types';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 // @ts-ignore
-import logoImg from '../assets/images/ma_logo_clean_1780675707006.png';
+import logoImg from '../assets/images/cbt_ma_annuriyyah_logo_1780701928746.png';
 
 // Helper function to check if a question is an essay question (with robust fallback checking)
 const isQuestionEssay = (q: any): boolean => {
@@ -273,7 +275,18 @@ interface TeacherDashboardProps {
   onToggleExamMode?: (mode: 'online' | 'offline') => void;
 }
 
-type TabType = 'overview' | 'students' | 'exams' | 'tokens' | 'results' | 'teachers' | 'monitoring';
+type TabType = 'overview' | 'students' | 'exams' | 'tokens' | 'results' | 'teachers' | 'monitoring' | 'cards';
+
+const isExamPermanent = (ex?: Exam) => {
+  if (!ex) return false;
+  const titleLower = ex.title.toLowerCase();
+  return (
+    ex.id === 'exam_2' ||
+    ex.id === 'exam_3' ||
+    titleLower.includes('matematika peminatan') ||
+    titleLower.includes('capaian belajar tahunan')
+  );
+};
 
 export default function TeacherDashboard({
   students,
@@ -295,6 +308,43 @@ export default function TeacherDashboard({
   const [liveReviewSession, setLiveReviewSession] = useState<ActiveSession | null>(null);
   const [showTechnicianGuide, setShowTechnicianGuide] = useState(false);
   const [activeGuideTab, setActiveGuideTab] = useState<'skema' | 'pc' | 'hp' | 'usb' | 'troubleshoot'>('skema');
+
+  // Card printing settings
+  const [printSchoolName, setPrintSchoolName] = useState('MA ANNURIYYAH');
+  const [printExamName, setPrintExamName] = useState('ASESMEN MADRASAH (AM) BERBASIS CBT');
+  const [printYear, setPrintYear] = useState('TAHUN PELAJARAN 2025/2026');
+  const [printPrincipal, setPrintPrincipal] = useState('Ababal Ghussoh, M.Pd.I');
+  const [printNip, setPrintNip] = useState('');
+  const [printDefaultSession, setPrintDefaultSession] = useState('Sesi 1');
+  const [printDefaultRoom, setPrintDefaultRoom] = useState('Lab Komputer 1');
+  const [printShowPhotoPlaceholder, setPrintShowPhotoPlaceholder] = useState(true);
+  const [printShowKop, setPrintShowKop] = useState(false);
+  const [printShowTtd, setPrintShowTtd] = useState(false);
+  const [showPesertaDropdown, setShowPesertaDropdown] = useState(false);
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [showPrintConfig, setShowPrintConfig] = useState(false);
+  const [showPrintTips, setShowPrintTips] = useState(false);
+  const [printSelectedClass, setPrintSelectedClass] = useState<string>('all');
+  const [printSelectedGender, setPrintSelectedGender] = useState<string>('all');
+  const [printSearchQuery, setPrintSearchQuery] = useState<string>('');
+  const [printSelectedStudentIds, setPrintSelectedStudentIds] = useState<string[]>([]);
+
+  // Automatically lookup & load Kepala Madrasah from teachers list (specifically "guru kode A" i.e. username 'aedia' or admin)
+  useEffect(() => {
+    const adminTeacher = teachers.find(t => t.username === 'aedia' || t.role === 'admin' || t.id === 't_1');
+    if (adminTeacher) {
+      if (printPrincipal === 'Aedia Janur' || printPrincipal === 'Ababal Ghussoh, M.Pd.I' || !printPrincipal || printPrincipal === 'H. Ahmad Syarif, M.Pd.') {
+        setPrintPrincipal(adminTeacher.name);
+      }
+    }
+  }, [teachers]);
+
+  // Automatically select all students initially when list loads
+  useEffect(() => {
+    if (students.length > 0 && printSelectedStudentIds.length === 0) {
+      setPrintSelectedStudentIds(students.map(s => s.id));
+    }
+  }, [students]);
 
   // Parse and merge student offline result files (.json)
   const handleImportOfflineFiles = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -505,6 +555,7 @@ export default function TeacherDashboard({
   const [newStudentUser, setNewStudentUser] = useState('');
   const [newStudentPass, setNewStudentPass] = useState('123');
   const [studentError, setStudentError] = useState<string | null>(null);
+  const [showAddStudentForm, setShowAddStudentForm] = useState(false);
 
   // Student Edit / Update state
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
@@ -531,6 +582,16 @@ export default function TeacherDashboard({
   const [newExamDuration, setNewExamDuration] = useState(30);
   const [newExamTargetClass, setNewExamTargetClass] = useState('Semua Kelas');
   const [customTargetClass, setCustomTargetClass] = useState('');
+  const [showAddExamForm, setShowAddExamForm] = useState(false);
+  const [showOfflineIntegration, setShowOfflineIntegration] = useState(false);
+
+  // Search Filters for sections
+  const [studentSearch, setStudentSearch] = useState('');
+  const [examSearch, setExamSearch] = useState('');
+  const [tokenSearch, setTokenSearch] = useState('');
+  const [monitoringSearch, setMonitoringSearch] = useState('');
+  const [resultSearch, setResultSearch] = useState('');
+  const [teacherSearch, setTeacherSearch] = useState('');
 
   // Question Form state
   const [newQText, setNewQText] = useState('');
@@ -660,6 +721,11 @@ export default function TeacherDashboard({
 
     if (!editingStudent) return;
 
+    if (editingStudent.id === 'user_1' || editingStudent.username === 'janur' || editingStudent.name === 'Ahmad Jaannuruzaki A' || editingStudent.nisn === '1922') {
+      setEditStudentError('Akun Utama (Ahmad Jaannuruzaki A) bersifat permanen dan data tidak boleh diubah!');
+      return;
+    }
+
     if (!editStudentName.trim() || !editStudentNisn.trim() || !editStudentClass.trim() || !editStudentUser.trim()) {
       setEditStudentError('Harap lengkapi semua isian formulir.');
       return;
@@ -675,17 +741,6 @@ export default function TeacherDashboard({
     if (students.some((s) => s.id !== editingStudent.id && s.nisn === editStudentNisn.trim())) {
       setEditStudentError('NISN ini sudah didaftarkan.');
       return;
-    }
-
-    if (editingStudent.username === 'janur' || editingStudent.id === 'user_1') {
-      if (editStudentName.trim() !== 'Ahmad Jaannuruzaki A') {
-        setEditStudentError('Nama Siswa Utama (Ahmad Jaannuruzaki A) tidak boleh diubah karena bersifat permanen!');
-        return;
-      }
-      if (usernameLower !== 'janur') {
-        setEditStudentError('Username Siswa Utama (janur) tidak boleh diubah karena bersifat permanen!');
-        return;
-      }
     }
 
     const updatedStudent: Student = {
@@ -704,8 +759,8 @@ export default function TeacherDashboard({
 
   const handleDeleteStudent = (id: string) => {
     const toDelete = students.find((s) => s.id === id);
-    if (toDelete && (toDelete.username === 'janur' || toDelete.id === 'user_1' || toDelete.name === 'Ahmad Jaannuruzaki A')) {
-      alert('Akun siswa utama Ahmad Jaannuruzaki A bersifat permanen dan tidak boleh dihapus!');
+    if (toDelete && (toDelete.id === 'user_1' || toDelete.username === 'janur' || toDelete.name === 'Ahmad Jaannuruzaki A' || toDelete.nisn === '1922')) {
+      alert('Akun Utama (Ahmad Jaannuruzaki A) bersifat permanen dan data tidak boleh dihapus!');
       return;
     }
     if (window.confirm('Yakin ingin menghapus siswa ini?')) {
@@ -719,6 +774,7 @@ export default function TeacherDashboard({
   const [newTeacherPass, setNewTeacherPass] = useState('123');
   const [newTeacherRole, setNewTeacherRole] = useState<'admin' | 'proctor'>('proctor');
   const [teacherError, setTeacherError] = useState<string | null>(null);
+  const [showAddTeacherForm, setShowAddTeacherForm] = useState(false);
 
   const handleAddTeacher = (e: FormEvent) => {
     e.preventDefault();
@@ -750,6 +806,7 @@ export default function TeacherDashboard({
     setNewTeacherUser('');
     setNewTeacherPass('123');
     setNewTeacherRole('proctor');
+    setShowAddTeacherForm(false);
   };
 
   const startEditTeacher = (teacher: Teacher) => {
@@ -784,6 +841,7 @@ export default function TeacherDashboard({
       editingTeacher.username === 'alam' || 
       editingTeacher.username === 'admin' ||
       editingTeacher.name === 'Aedia Janur' || 
+      editingTeacher.name === 'Ababal Ghussoh, M.Pd.I' ||
       editingTeacher.name === 'Alam Semesta';
 
     if (isPermanent) {
@@ -815,8 +873,8 @@ export default function TeacherDashboard({
 
   const handleDeleteTeacher = (id: string) => {
     const toDelete = teachers.find((t) => t.id === id);
-    if (toDelete && (toDelete.username === 'aedia' || toDelete.username === 'admin' || toDelete.username === 'alam' || toDelete.name === 'Aedia Janur' || toDelete.name === 'Alam Semesta')) {
-      alert('Akun permanen (Aedia Janur / Alam Semesta) bersifat tetap dan tidak boleh dihapus!');
+    if (toDelete && (toDelete.username === 'aedia' || toDelete.username === 'admin' || toDelete.username === 'alam' || toDelete.name === 'Aedia Janur' || toDelete.name === 'Ababal Ghussoh, M.Pd.I' || toDelete.name === 'Alam Semesta')) {
+      alert('Akun permanen (Ababal Ghussoh, M.Pd.I / Alam Semesta) bersifat tetap dan tidak boleh dihapus!');
       return;
     }
 
@@ -1366,9 +1424,15 @@ export default function TeacherDashboard({
     setUploadedFileName('');
     setNewExamFileSuccess(null);
     setNewExamFileError(null);
+    setShowAddExamForm(false);
   };
 
   const handleDeleteExam = (id: string) => {
+    const toDelete = exams.find((e) => e.id === id);
+    if (toDelete && (toDelete.id === 'exam_2' || toDelete.id === 'exam_3' || toDelete.title.toLowerCase().includes('matematika peminatan') || toDelete.title.toLowerCase().includes('capaian belajar tahunan'))) {
+      alert('Paket Ujian ini bersifat permanen dan tidak boleh dihapus!');
+      return;
+    }
     if (currentUserRole !== 'admin') {
       alert('Hanya Administrator (Guru Utama) yang memiliki hak akses untuk menghapus paket ujian ini!');
       return;
@@ -1404,6 +1468,14 @@ export default function TeacherDashboard({
     e.preventDefault();
     if (!selectedExamIdForQuestions) return;
 
+    const targetExam = exams.find((ex) => ex.id === selectedExamIdForQuestions);
+    if (!targetExam) return;
+
+    if (isExamPermanent(targetExam)) {
+      alert('Paket Ujian ini bersifat permanen. Soal tidak dapat ditambahkan!');
+      return;
+    }
+
     if (newQType === 'mc' && (!newQText.trim() || !newQOptA || !newQOptB || !newQOptC)) {
       alert('Untuk tipe pilihan ganda, teks soal dan minimal pilihan A, B, C wajib diisi.');
       return;
@@ -1413,9 +1485,6 @@ export default function TeacherDashboard({
       alert('Teks soal esai wajib diisi.');
       return;
     }
-
-    const targetExam = exams.find((ex) => ex.id === selectedExamIdForQuestions);
-    if (!targetExam) return;
 
     const newQuestion: Question = {
       id: `q_${Date.now()}`,
@@ -1452,6 +1521,11 @@ export default function TeacherDashboard({
 
   const handleDeleteQuestion = (questionId: string) => {
     if (!selectedExamIdForQuestions) return;
+    const targetExam = exams.find((ex) => ex.id === selectedExamIdForQuestions);
+    if (targetExam && isExamPermanent(targetExam)) {
+      alert('Paket Ujian ini bersifat permanen. Soal tidak dapat dihapus!');
+      return;
+    }
     if (window.confirm('Hapus soal ini?')) {
       onUpdateExams(
         exams.map((ex) =>
@@ -1467,6 +1541,11 @@ export default function TeacherDashboard({
     try {
       setUploadError(null);
       setUploadSuccess(null);
+
+      const targetExam = exams.find((ex) => ex.id === selectedExamIdForQuestions);
+      if (targetExam && isExamPermanent(targetExam)) {
+        throw new Error('Paket Ujian ini bersifat permanen. Soal tidak dapat diimpor!');
+      }
 
       const parsedQuestions = parseMasalText(fileContent, fileName);
 
@@ -1679,7 +1758,8 @@ export default function TeacherDashboard({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
+    <>
+      <div className="min-h-screen bg-gray-50 flex flex-col font-sans print:hidden">
       
       {/* Top Banner Header */}
       <header className="bg-emerald-800 text-white shadow-md py-4 px-6 z-10">
@@ -1799,6 +1879,21 @@ export default function TeacherDashboard({
             </button>
 
             <button
+              onClick={() => setActiveTab('cards')}
+              className={`w-full text-left p-3 rounded-2xl text-sm font-semibold transition-all flex items-center justify-between ${
+                activeTab === 'cards'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/10'
+                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              <span className="flex items-center gap-2.5">
+                <Printer className="w-4 h-4" />
+                Cetak Kartu Ujian
+              </span>
+              <ChevronRight className="w-3.5 h-3.5 opacity-60" />
+            </button>
+
+            <button
               onClick={() => setActiveTab('exams')}
               className={`w-full text-left p-3 rounded-2xl text-sm font-semibold transition-all flex items-center justify-between ${
                 activeTab === 'exams'
@@ -1912,45 +2007,98 @@ export default function TeacherDashboard({
               
               {/* Quick Stats Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                    <Users className="w-6 h-6" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('students');
+                    setStudentError(null);
+                  }}
+                  className="bg-white rounded-3xl p-5 shadow-xs hover:shadow-md border border-gray-100 hover:border-emerald-250 transition-all cursor-pointer flex items-center justify-between text-left w-full group active:scale-[0.99]"
+                  title="Pintasan ke Data Siswa Terdaftar"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 group-hover:bg-emerald-100 transition-all">
+                      <Users className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="text-gray-400 text-xs block uppercase font-bold tracking-wider font-sans">Total Siswa</span>
+                      <strong className="text-2xl font-black text-gray-800 block mt-0.5 group-hover:text-emerald-700 transition-colors">{students.length}</strong>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-gray-400 text-xs block uppercase font-bold">Total Siswa</span>
-                    <strong className="text-2xl font-black text-gray-800 block mt-0.5">{students.length}</strong>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-[9px] text-gray-300 font-bold opacity-0 group-hover:opacity-100 group-hover:text-emerald-500 transition-all font-mono uppercase tracking-wider">Lihat</span>
+                    <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" />
                   </div>
-                </div>
+                </button>
 
-                <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center shrink-0">
-                    <BookOpen className="w-6 h-6" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('exams');
+                  }}
+                  className="bg-white rounded-3xl p-5 shadow-xs hover:shadow-md border border-gray-100 hover:border-teal-250 transition-all cursor-pointer flex items-center justify-between text-left w-full group active:scale-[0.99]"
+                  title="Pintasan ke Bank Soal & Paket Ujian"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center shrink-0 group-hover:bg-teal-100 transition-all">
+                      <BookOpen className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="text-gray-400 text-xs block uppercase font-bold tracking-wider font-sans">Paket Ujian</span>
+                      <strong className="text-2xl font-black text-gray-800 block mt-0.5 group-hover:text-teal-700 transition-colors">{exams.length}</strong>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-gray-400 text-xs block uppercase font-bold">Paket Ujian</span>
-                    <strong className="text-2xl font-black text-gray-800 block mt-0.5">{exams.length}</strong>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-[9px] text-gray-300 font-bold opacity-0 group-hover:opacity-100 group-hover:text-teal-505 group-hover:text-teal-600 transition-all font-mono uppercase tracking-wider">Lihat</span>
+                    <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-teal-505 group-hover:text-teal-600 group-hover:translate-x-1 transition-all" />
                   </div>
-                </div>
+                </button>
 
-                <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                    <ClipboardList className="w-6 h-6" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('results');
+                  }}
+                  className="bg-white rounded-3xl p-5 shadow-xs hover:shadow-md border border-gray-100 hover:border-amber-250 transition-all cursor-pointer flex items-center justify-between text-left w-full group active:scale-[0.99]"
+                  title="Pintasan ke Rekap Hasil Ujian"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 group-hover:bg-amber-100 transition-all">
+                      <ClipboardList className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="text-gray-400 text-xs block uppercase font-bold tracking-wider font-sans">Ujian Dikerjakan</span>
+                      <strong className="text-2xl font-black text-gray-800 block mt-0.5 group-hover:text-amber-700 transition-colors">{results.length}</strong>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-gray-400 text-xs block uppercase font-bold">Ujian Dikerjakan</span>
-                    <strong className="text-2xl font-black text-gray-800 block mt-0.5">{results.length}</strong>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-[9px] text-gray-300 font-bold opacity-0 group-hover:opacity-100 group-hover:text-amber-600 transition-all font-mono uppercase tracking-wider">Lihat</span>
+                    <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-amber-505 group-hover:text-amber-600 group-hover:translate-x-1 transition-all" />
                   </div>
-                </div>
+                </button>
 
-                <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                    <Award className="w-6 h-6" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('results');
+                  }}
+                  className="bg-white rounded-3xl p-5 shadow-xs hover:shadow-md border border-gray-100 hover:border-blue-250 transition-all cursor-pointer flex items-center justify-between text-left w-full group active:scale-[0.99]"
+                  title="Pintasan ke Rekap Hasil & Analisis Nilai"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-all">
+                      <Award className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="text-gray-400 text-xs block uppercase font-bold tracking-wider font-sans">Rata-Rata Nilai</span>
+                      <strong className="text-2xl font-black text-gray-800 block mt-0.5 group-hover:text-blue-700 transition-colors">{avgScore}</strong>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-gray-400 text-xs block uppercase font-bold">Rata-Rata Nilai</span>
-                    <strong className="text-2xl font-black text-gray-800 block mt-0.5">{avgScore}</strong>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-[9px] text-gray-300 font-bold opacity-0 group-hover:opacity-100 group-hover:text-blue-600 transition-all font-mono uppercase tracking-wider">Analisis</span>
+                    <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
                   </div>
-                </div>
+                </button>
               </div>
 
               {/* Graphic Stats & Performance Panels */}
@@ -2243,135 +2391,207 @@ export default function TeacherDashboard({
               
               {/* Form Add Student */}
               <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-                <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-4 font-mono">
-                  Daftarkan Siswa Baru
-                </h3>
-
-                {studentError && (
-                  <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 p-2.5 rounded-xl mb-4 border border-red-100">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{studentError}</span>
-                  </div>
-                )}
-
-                <form onSubmit={handleAddStudent} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider mb-1">
-                      Nama Lengkap Siswa
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={newStudentName}
-                      onChange={(e) => setNewStudentName(e.target.value)}
-                      placeholder="Contoh: Ahmad Khoirul"
-                      className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-sans"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider mb-1">
-                      Nomor Induk / NISN
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={newStudentNisn}
-                      onChange={(e) => setNewStudentNisn(e.target.value)}
-                      placeholder="Contoh: 202611599"
-                      className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider mb-1">
-                      Gender / Jenis Kelamin
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setNewStudentGender('Laki-laki')}
-                        className={`py-2 px-1 text-xs font-semibold rounded-xl border transition-all ${
-                          newStudentGender === 'Laki-laki'
-                            ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
-                            : 'border-gray-200 text-gray-500 hover:bg-gray-50'
-                        }`}
-                      >
-                        Laki-laki
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setNewStudentGender('Perempuan')}
-                        className={`py-2 px-1 text-xs font-semibold rounded-xl border transition-all ${
-                          newStudentGender === 'Perempuan'
-                            ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
-                            : 'border-gray-200 text-gray-500 hover:bg-gray-50'
-                        }`}
-                      >
-                        Perempuan
-                      </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddStudentForm(!showAddStudentForm)}
+                  className="flex items-center justify-between w-full text-left focus:outline-none group cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-emerald-50 rounded-2xl text-emerald-600 transition-colors group-hover:bg-emerald-100 flex items-center justify-center">
+                      <Plus className={`w-4 h-4 transition-transform duration-300 ${showAddStudentForm ? 'rotate-45 text-red-650' : ''}`} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-extrabold text-gray-800 uppercase tracking-wider mb-0.5 font-mono">
+                        Daftarkan Siswa Baru
+                      </h3>
+                      <p className="text-[11px] text-gray-400 font-sans font-medium normal-case">
+                        {showAddStudentForm ? 'Klik untuk menutup formulir pendaftaran' : 'Klik untuk membuka formulir pendaftaran siswa baru'}
+                      </p>
                     </div>
                   </div>
+                  <span className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition-all ${
+                    showAddStudentForm 
+                      ? 'bg-gray-50 border-gray-250 text-gray-550' 
+                      : 'bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-600/10 hover:bg-emerald-700'
+                  }`}>
+                    {showAddStudentForm ? 'Sembunyikan' : 'Buka Formulir'}
+                  </span>
+                </button>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider mb-1">
-                      Kelas
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={newStudentClass}
-                      onChange={(e) => setNewStudentClass(e.target.value)}
-                      placeholder="Contoh: XII IPA 2"
-                      className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-sans"
-                    />
-                  </div>
+                {showAddStudentForm && (
+                  <div className="mt-6 pt-6 border-t border-gray-100">
+                    {studentError && (
+                      <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 p-2.5 rounded-xl mb-4 border border-red-100">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>{studentError}</span>
+                      </div>
+                    )}
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider mb-1">
-                      Username Ujian
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={newStudentUser}
-                      onChange={(e) => setNewStudentUser(e.target.value)}
-                      placeholder="Saran: nama kecil"
-                      className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-sans"
-                    />
-                  </div>
+                    <form onSubmit={(e) => {
+                      handleAddStudent(e);
+                      setShowAddStudentForm(false);
+                    }} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider mb-1">
+                          Nama Lengkap Siswa
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={newStudentName}
+                          onChange={(e) => setNewStudentName(e.target.value)}
+                          placeholder="Contoh: Ahmad Khoirul"
+                          className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-sans"
+                        />
+                      </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider mb-1">
-                      Password Ujian
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={newStudentPass}
-                      onChange={(e) => setNewStudentPass(e.target.value)}
-                      placeholder="Gunakan angka biasa"
-                      className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
-                    />
-                  </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider mb-1">
+                          Nomor Induk / NISN
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={newStudentNisn}
+                          onChange={(e) => setNewStudentNisn(e.target.value)}
+                          placeholder="Contoh: 202611599"
+                          className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
+                        />
+                      </div>
 
-                  <div className="md:col-span-3 flex justify-end">
-                    <button
-                      type="submit"
-                      className="py-2.5 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1 uppercase"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Daftarkan Peserta
-                    </button>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider mb-1">
+                          Gender / Jenis Kelamin
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setNewStudentGender('Laki-laki')}
+                            className={`py-2 px-1 text-xs font-semibold rounded-xl border transition-all ${
+                              newStudentGender === 'Laki-laki'
+                                ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
+                                : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                            }`}
+                          >
+                            Laki-laki
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setNewStudentGender('Perempuan')}
+                            className={`py-2 px-1 text-xs font-semibold rounded-xl border transition-all ${
+                              newStudentGender === 'Perempuan'
+                                ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
+                                : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                            }`}
+                          >
+                            Perempuan
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider mb-1">
+                          Kelas
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={newStudentClass}
+                          onChange={(e) => setNewStudentClass(e.target.value)}
+                          placeholder="Contoh: XII IPA 2"
+                          className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-sans"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider mb-1">
+                          Username Ujian
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={newStudentUser}
+                          onChange={(e) => setNewStudentUser(e.target.value)}
+                          placeholder="Saran: nama kecil"
+                          className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-sans"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider mb-1">
+                          Password Ujian
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={newStudentPass}
+                          onChange={(e) => setNewStudentPass(e.target.value)}
+                          placeholder="Gunakan angka biasa"
+                          className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
+                        />
+                      </div>
+
+                      <div className="md:col-span-3 flex justify-end">
+                        <button
+                          type="submit"
+                          className="py-2.5 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1 uppercase cursor-pointer active:scale-95"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Daftarkan Peserta
+                        </button>
+                      </div>
+                    </form>
                   </div>
-                </form>
+                )}
               </div>
 
               {/* Table Student Register */}
               <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-                <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-4 font-mono">
-                  Siswa Madrasah Terdaftar
-                </h3>
+                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider font-mono flex items-center gap-2">
+                      <Users className="w-4 h-4 text-emerald-600" />
+                      Siswa Madrasah Terdaftar
+                    </h3>
+                    <p className="text-[10px] text-gray-400 mt-0.5">Kelola data siswa dan cetak kartu ujian resmi CBT.</p>
+                  </div>
+                  
+                  {/* Search Bar & Quick Print Action Button */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5 w-full xl:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPrintSelectedStudentIds(students.map(s => s.id));
+                        setActiveTab('cards');
+                      }}
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 active:scale-[0.98] text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs"
+                      title="Cepat menuju cetak kartu untuk semua siswa"
+                    >
+                      <Printer className="w-3.5 h-3.5 shrink-0" />
+                      <span>Cetak Semua Kartu Ujian</span>
+                    </button>
+
+                    <div className="relative flex-1 sm:w-72">
+                      <input
+                        type="text"
+                        value={studentSearch}
+                        onChange={(e) => setStudentSearch(e.target.value)}
+                        placeholder="Cari nama, NISN, kelas, username..."
+                        className="w-full pl-9 pr-8 py-2 text-xs bg-gray-50 hover:bg-gray-100 focus:bg-white border border-gray-200 focus:border-emerald-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all font-sans"
+                      />
+                      <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                      {studentSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setStudentSearch('')}
+                          className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-650 cursor-pointer font-bold text-xs"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm border-collapse">
@@ -2386,8 +2606,27 @@ export default function TeacherDashboard({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-gray-700">
-                      {students.map((std) => (
-                        <tr key={std.id} className="hover:bg-gray-50/50 transition-colors">
+                      {students.filter(std => {
+                        const s = studentSearch.toLowerCase();
+                        return std.name.toLowerCase().includes(s) ||
+                               (std.nisn || '').toLowerCase().includes(s) ||
+                               (std.classGroup || '').toLowerCase().includes(s) ||
+                               (std.username || '').toLowerCase().includes(s);
+                      }).length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-gray-400 font-sans text-xs">
+                            Tidak ditemukan data siswa yang cocok dengan tipe pencarian Anda.
+                          </td>
+                        </tr>
+                      ) : (
+                        students.filter(std => {
+                          const s = studentSearch.toLowerCase();
+                          return std.name.toLowerCase().includes(s) ||
+                                 (std.nisn || '').toLowerCase().includes(s) ||
+                                 (std.classGroup || '').toLowerCase().includes(s) ||
+                                 (std.username || '').toLowerCase().includes(s);
+                        }).map((std) => (
+                          <tr key={std.id} className="hover:bg-gray-50/50 transition-colors">
                           <td className="py-3.5 px-3 align-middle font-semibold text-gray-800">{std.name}</td>
                           <td className="py-3.5 px-3 align-middle font-mono text-xs">{std.nisn}</td>
                           <td className="py-3.5 px-3 align-middle">{std.classGroup}</td>
@@ -2400,7 +2639,20 @@ export default function TeacherDashboard({
                           </td>
                           <td className="py-3.5 px-3 align-middle text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-2">
-                              {std.username !== 'janur' && std.id !== 'user_1' && std.name !== 'Ahmad Jaannuruzaki A' ? (
+                              {/* Always allow printing participant cards */}
+                              <button
+                                onClick={() => {
+                                  setPrintSelectedStudentIds([std.id]);
+                                  setActiveTab('cards');
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 active:scale-[0.97] text-blue-750 hover:text-blue-850 rounded-xl text-xs font-bold transition-all border border-blue-100 cursor-pointer shadow-xs"
+                                title="Cetak Kartu Ujian Resmi Siswa Ini"
+                              >
+                                <Printer className="w-3.5 h-3.5 shrink-0" />
+                                <span>Kartu</span>
+                              </button>
+
+                              {!(std.id === 'user_1' || std.username === 'janur' || std.name === 'Ahmad Jaannuruzaki A' || std.nisn === '1922') ? (
                                 <>
                                   <button
                                     onClick={() => startEditStudent(std)}
@@ -2421,17 +2673,602 @@ export default function TeacherDashboard({
                                 </>
                               ) : (
                                 <span className="text-xs text-gray-400 italic px-3 font-semibold text-emerald-650">
-                                  Bawaan
+                                  Bawaan (Permanen)
                                 </span>
                               )}
                             </div>
                           </td>
                         </tr>
-                      ))}
+                      )))}
                     </tbody>
                   </table>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* CARDS TAB (Cetak Kartu Ujian) */}
+          {activeTab === 'cards' && (
+            <div className="space-y-6">
+              
+              {/* Header section */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-xs">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider font-mono flex items-center gap-2">
+                    <Printer className="w-5 h-5 text-emerald-600 animate-pulse" />
+                    Cetak Kartu Peserta Ujian
+                  </h3>
+                  <p className="text-[11px] text-gray-400 mt-0.5 font-sans">
+                    Konfigurasi kop sekolah/madrasah, tanda tangan pelaksana, foto siswa, dan filter pencetakan kartu ujian nasional standar.
+                  </p>
+                </div>
+                
+                <div className="flex flex-wrap gap-2 items-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (printSelectedStudentIds.length === 0) {
+                        alert('Silakan pilih minimal satu siswa terlebih dahulu untuk dicetak!');
+                        return;
+                      }
+                      window.print();
+                    }}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
+                  >
+                    <Printer className="w-4 h-4 shrink-0" />
+                    <span>Mulai Cetak ({printSelectedStudentIds.length} Kartu)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Grid content */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* CONFIGURATION SIDEBAR (Left Column) */}
+                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-xs space-y-6 self-start">
+                  <div>
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-4">
+                      <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider font-mono">
+                        ⚙️ Kop & TTD
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setShowPrintConfig(!showPrintConfig)}
+                        className="text-[10px] font-sans font-bold flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 hover:bg-emerald-50 text-gray-500 hover:text-emerald-700 rounded-lg border border-gray-200 hover:border-emerald-250 transition-all cursor-pointer select-none"
+                      >
+                        {showPrintConfig ? (
+                          <>
+                            <EyeOff className="w-3.5 h-3.5 text-red-500" />
+                            <span>Sembunyikan</span>
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Tampilkan</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    
+                    {showPrintConfig ? (
+                      <div className="space-y-3.5 text-xs text-gray-650">
+                        <div>
+                          <label className="block text-gray-400 font-bold mb-1 font-sans uppercase text-[10px]">1. Nama Madrasah / Sekolah</label>
+                          <input
+                            type="text"
+                            value={printSchoolName}
+                            onChange={(e) => setPrintSchoolName(e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none transition-all font-sans font-bold"
+                            placeholder="MA ANNURIYYAH"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-gray-400 font-bold mb-1 font-sans uppercase text-[10px]">2. Nama Ujian / Asesmen</label>
+                          <input
+                            type="text"
+                            value={printExamName}
+                            onChange={(e) => setPrintExamName(e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none transition-all font-sans"
+                            placeholder="ASESMEN MADRASAH (AM)"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-gray-400 font-bold mb-1 font-sans uppercase text-[10px]">3. Tahun Pelajaran</label>
+                          <input
+                            type="text"
+                            value={printYear}
+                            onChange={(e) => setPrintYear(e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none transition-all font-sans"
+                            placeholder="TAHUN PELAJARAN 2025/2026"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-gray-400 font-bold mb-1 font-sans uppercase text-[10px]">4. Sesi Default</label>
+                            <input
+                              type="text"
+                              value={printDefaultSession}
+                              onChange={(e) => setPrintDefaultSession(e.target.value)}
+                              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none transition-all font-sans text-center font-semibold"
+                              placeholder="Sesi 1"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-gray-400 font-bold mb-1 font-sans uppercase text-[10px]">5. Ruang Default</label>
+                            <input
+                              type="text"
+                              value={printDefaultRoom}
+                              onChange={(e) => setPrintDefaultRoom(e.target.value)}
+                              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none transition-all font-sans text-center font-semibold"
+                              placeholder="Lab Komputer 1"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-gray-400 font-bold mb-1 font-sans uppercase text-[10px]">6. Kepala Madrasah / Panitia</label>
+                          <input
+                            type="text"
+                            value={printPrincipal}
+                            onChange={(e) => setPrintPrincipal(e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none transition-all font-sans font-bold"
+                            placeholder="Nama Kepala Madrasah"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-gray-400 font-bold mb-1 font-sans uppercase text-[10px]">7. NIP Kepala Madrasah</label>
+                          <input
+                            type="text"
+                            value={printNip}
+                            onChange={(e) => setPrintNip(e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none transition-all font-sans"
+                            placeholder="NIP Kepala Madrasah (opsional)"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-2.5 mt-4 pt-3 border-t border-gray-100 font-sans text-xs">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              id="showKopChk"
+                              checked={printShowKop}
+                              onChange={(e) => setPrintShowKop(e.target.checked)}
+                              className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
+                            />
+                            <label htmlFor="showKopChk" className="text-gray-600 font-bold cursor-pointer select-none">
+                              Tampilkan Kop Kartu Ujian
+                            </label>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              id="showPhotoChk"
+                              checked={printShowPhotoPlaceholder}
+                              onChange={(e) => setPrintShowPhotoPlaceholder(e.target.checked)}
+                              className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
+                            />
+                            <label htmlFor="showPhotoChk" className="text-gray-600 font-bold cursor-pointer select-none">
+                              Tampilkan Logo di Kotak Foto (3x4)
+                            </label>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              id="showTtdChk"
+                              checked={printShowTtd}
+                              onChange={(e) => setPrintShowTtd(e.target.checked)}
+                              className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
+                            />
+                            <label htmlFor="showTtdChk" className="text-gray-600 font-bold cursor-pointer select-none">
+                              Tampilkan TTD & Cap Panitia
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-5 px-4 text-xs text-gray-400 bg-gray-50 rounded-2xl border border-dashed border-gray-150 font-sans leading-relaxed">
+                        Tampilan pengaturan Kop & TTD disembunyikan. Untuk melakukan konfigurasi kembali, klik tombol <strong>Tampilkan</strong> di atas.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* PESERTA SELECTION (Filters & Search) */}
+                  <div className="pt-2">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-4">
+                      <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider font-mono">
+                        👥 Filter & Pilih Peserta
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                        className="text-[10px] font-sans font-bold flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 hover:bg-emerald-50 text-gray-500 hover:text-emerald-700 rounded-lg border border-gray-200 hover:border-emerald-250 transition-all cursor-pointer select-none"
+                      >
+                        {showFilterDropdown ? (
+                          <>
+                            <EyeOff className="w-3.5 h-3.5 text-red-500" />
+                            <span>Sembunyikan</span>
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Tampilkan</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    
+                    {showFilterDropdown ? (
+                      <div className="space-y-3.5 text-xs">
+                        <div>
+                          <label className="block text-gray-400 font-bold mb-1 font-sans uppercase text-[10px]">Cari Nama / NISN</label>
+                          <input
+                            type="text"
+                            value={printSearchQuery}
+                            onChange={(e) => setPrintSearchQuery(e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none transition-all font-sans"
+                            placeholder="Ketik nama atau NISN..."
+                          />
+                        </div>
+
+                        {/* Dropdown FILTER & PILIH PESERTA */}
+                        <div className="relative">
+                          <label className="block text-gray-400 font-bold mb-1 font-sans uppercase text-[10px]">Pilih Peserta Ujian</label>
+                          <button
+                            type="button"
+                            onClick={() => setShowPesertaDropdown(!showPesertaDropdown)}
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 hover:bg-gray-150 hover:border-gray-300 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none transition-all font-sans text-left flex items-center justify-between cursor-pointer font-bold text-gray-700"
+                          >
+                            <span className="truncate">
+                              {printSelectedStudentIds.length === 0 
+                                ? 'Belum Ada Peserta Terpilih' 
+                                : printSelectedStudentIds.length === students.length 
+                                ? 'Semua Peserta Terpilih' 
+                                : `${printSelectedStudentIds.length} Peserta Terpilih`}
+                            </span>
+                            <span className="text-gray-400 font-mono text-[9px] shrink-0">
+                              {showPesertaDropdown ? '▲' : '▼'}
+                            </span>
+                          </button>
+
+                          {showPesertaDropdown && (
+                            <>
+                              {/* Simple translucent click catcher */}
+                              <div className="fixed inset-0 z-40" onClick={() => setShowPesertaDropdown(false)} />
+                              <div className="absolute left-0 mt-1.5 w-full bg-white border border-gray-200 rounded-2xl shadow-xl z-50 max-h-64 overflow-y-auto p-2 space-y-1">
+                                <div className="px-1.5 py-1 text-[9px] text-gray-400 font-bold border-b border-gray-150 flex justify-between items-center bg-gray-50/50 rounded-lg">
+                                  <span>DAFTAR PESERTA FILTERED</span>
+                                  <span className="font-mono text-[8px] text-emerald-700">
+                                    {students.filter(std => {
+                                      const matchSearch = std.name.toLowerCase().includes(printSearchQuery.toLowerCase()) || std.nisn.includes(printSearchQuery);
+                                      const matchClass = printSelectedClass === 'all' || std.classGroup === printSelectedClass;
+                                      const matchGender = printSelectedGender === 'all' || std.gender === printSelectedGender;
+                                      return matchSearch && matchClass && matchGender;
+                                    }).length} Terlihat
+                                  </span>
+                                </div>
+                                <div className="space-y-0.5 mt-1">
+                                  {students.filter(std => {
+                                    const matchSearch = std.name.toLowerCase().includes(printSearchQuery.toLowerCase()) || std.nisn.includes(printSearchQuery);
+                                    const matchClass = printSelectedClass === 'all' || std.classGroup === printSelectedClass;
+                                    const matchGender = printSelectedGender === 'all' || std.gender === printSelectedGender;
+                                    return matchSearch && matchClass && matchGender;
+                                  }).length === 0 ? (
+                                    <div className="p-3 text-center text-gray-400 italic">
+                                      Tidak ada peserta yang cocok
+                                    </div>
+                                  ) : (
+                                    students.filter(std => {
+                                      const matchSearch = std.name.toLowerCase().includes(printSearchQuery.toLowerCase()) || std.nisn.includes(printSearchQuery);
+                                      const matchClass = printSelectedClass === 'all' || std.classGroup === printSelectedClass;
+                                      const matchGender = printSelectedGender === 'all' || std.gender === printSelectedGender;
+                                      return matchSearch && matchClass && matchGender;
+                                    }).map((std) => {
+                                      const isChecked = printSelectedStudentIds.includes(std.id);
+                                      return (
+                                        <label
+                                          key={std.id}
+                                          className={`flex items-center gap-2 p-1.5 hover:bg-emerald-50/50 rounded-lg cursor-pointer transition-colors text-left ${isChecked ? 'bg-emerald-50/20 text-emerald-950 font-medium' : 'text-gray-700'}`}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={(e) => {
+                                              if (e.target.checked) {
+                                                setPrintSelectedStudentIds([...printSelectedStudentIds, std.id]);
+                                              } else {
+                                                setPrintSelectedStudentIds(printSelectedStudentIds.filter(id => id !== std.id));
+                                              }
+                                            }}
+                                            className="w-3.5 h-3.5 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
+                                          />
+                                          <div className="flex-1 min-w-0">
+                                            <span className="block font-semibold truncate leading-tight select-none text-[11px]">{std.name}</span>
+                                            <span className="block text-[8.5px] text-gray-400 font-mono leading-none mt-0.5 select-none">{std.classGroup} • NISN {std.nisn}</span>
+                                          </div>
+                                        </label>
+                                      );
+                                    })
+                                  )}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-gray-400 font-bold mb-1 font-sans uppercase text-[10px]">Kelas</label>
+                            <select
+                              value={printSelectedClass}
+                              onChange={(e) => setPrintSelectedClass(e.target.value)}
+                              className="w-full px-2 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none font-sans font-semibold text-gray-700 cursor-pointer"
+                            >
+                              <option value="all">Semua Kelas</option>
+                              {Array.from(new Set(students.map(s => s.classGroup).filter(Boolean))).map((cls) => (
+                                <option key={cls} value={cls}>{cls}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-gray-400 font-bold mb-1 font-sans uppercase text-[10px]">Jenis Kelamin</label>
+                            <select
+                              value={printSelectedGender}
+                              onChange={(e) => setPrintSelectedGender(e.target.value)}
+                              className="w-full px-2 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-emerald-500 focus:bg-white focus:outline-none font-sans font-semibold text-gray-700 cursor-pointer"
+                            >
+                              <option value="all">Semua</option>
+                              <option value="Laki-laki">Laki-laki</option>
+                              <option value="Perempuan">Perempuan</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* QUICK SELECTION ACTIONS */}
+                        <div className="grid grid-cols-2 gap-2 pt-2 font-sans font-bold">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const filteredIds = students.filter(std => {
+                                const matchSearch = std.name.toLowerCase().includes(printSearchQuery.toLowerCase()) || std.nisn.includes(printSearchQuery);
+                                const matchClass = printSelectedClass === 'all' || std.classGroup === printSelectedClass;
+                                const matchGender = printSelectedGender === 'all' || std.gender === printSelectedGender;
+                                return matchSearch && matchClass && matchGender;
+                              }).map(s => s.id);
+                              
+                              const merged = Array.from(new Set([...printSelectedStudentIds, ...filteredIds]));
+                              setPrintSelectedStudentIds(merged);
+                            }}
+                            className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg hover:shadow-xs text-[10px] transition-all text-center cursor-pointer"
+                          >
+                            Centang Semua
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const filteredIds = students.filter(std => {
+                                const matchSearch = std.name.toLowerCase().includes(printSearchQuery.toLowerCase()) || std.nisn.includes(printSearchQuery);
+                                const matchClass = printSelectedClass === 'all' || std.classGroup === printSelectedClass;
+                                const matchGender = printSelectedGender === 'all' || std.gender === printSelectedGender;
+                                return matchSearch && matchClass && matchGender;
+                              }).map(s => s.id);
+                              
+                              const clean = printSelectedStudentIds.filter(id => !filteredIds.includes(id));
+                              setPrintSelectedStudentIds(clean);
+                            }}
+                            className="p-2 bg-gray-50 hover:bg-red-50 text-gray-500 hover:text-red-700 rounded-lg border border-gray-200 hover:border-red-100 text-[10px] transition-all text-center cursor-pointer"
+                          >
+                            Kosongkan
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-5 px-4 text-xs text-gray-400 bg-gray-50 rounded-2xl border border-dashed border-gray-150 font-sans leading-relaxed">
+                        Pencarian & filter peserta disembunyikan. Klik <strong>Tampilkan</strong> untuk memilih peserta.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* CARDS PREVIEW GRID AREA (Right 2 Columns) */}
+                <div className="lg:col-span-2 space-y-4">
+                  
+                  {/* Notice Banner */}
+                  <div className="bg-amber-50 border border-amber-100 p-4.5 rounded-2xl text-xs text-amber-900 leading-relaxed font-sans transition-all">
+                    <div className="flex items-center justify-between font-bold text-amber-950 cursor-pointer select-none" onClick={() => setShowPrintTips(!showPrintTips)}>
+                      <span className="flex items-center gap-1.5 hover:text-amber-700">
+                        💡 Tips Cetak Optimal
+                      </span>
+                      <button
+                        type="button"
+                        className="text-[10px] font-sans font-extrabold bg-amber-100 hover:bg-amber-150 text-amber-800 px-2.5 py-1 rounded-xl transition-all cursor-pointer border border-amber-200/50"
+                      >
+                        {showPrintTips ? 'Sembunyikan ▲' : 'Buka Tips ▼'}
+                      </button>
+                    </div>
+                    {showPrintTips && (
+                      <p className="mt-2.5 pt-2.5 border-t border-amber-100 text-amber-800 leading-relaxed">
+                        Gunakan opsi cetak <strong>Landscape (Tidur)</strong> di pengaturan printer browser Anda dengan ukuran kertas <strong>A4</strong>. Atur parameter <strong>Margins ke &quot;None&quot; (Tanpa Margin)</strong> atau <strong>&quot;Default&quot;</strong>, dan centang pilihan <strong>&quot;Background graphics&quot; (Grafis Latar Belakang)</strong> agar logo, bingkai, dan warna kartu tercetak sempurna.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* List of currently filtered students */}
+                  <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-xs space-y-4">
+                    <div className="flex justify-between items-center pb-2 border-b border-gray-50">
+                      <div>
+                        <h4 className="text-xs font-bold text-gray-700 uppercase tracking-widest font-mono">
+                          👁️ PREVIEW TATA LETAK CETAK KARTU (STANDAR NASIONAL)
+                        </h4>
+                        <p className="text-[10px] text-gray-400 mt-0.5 font-sans">Terdapat {students.filter(std => {
+                              const matchSearch = std.name.toLowerCase().includes(printSearchQuery.toLowerCase()) || std.nisn.includes(printSearchQuery);
+                              const matchClass = printSelectedClass === 'all' || std.classGroup === printSelectedClass;
+                              const matchGender = printSelectedGender === 'all' || std.gender === printSelectedGender;
+                              return matchSearch && matchClass && matchGender;
+                            }).length} siswa sesuai filter. ({printSelectedStudentIds.length} Tercentang untuk Dicetak)</p>
+                      </div>
+                      
+                      {/* Checkbox status indicator */}
+                      <span className="text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-xl">
+                        {printSelectedStudentIds.length} / {students.length} Siswa Terpilih
+                      </span>
+                    </div>
+
+                    {/* Live Responsive Card Layout */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                      {students.filter(std => {
+                        const matchSearch = std.name.toLowerCase().includes(printSearchQuery.toLowerCase()) || std.nisn.includes(printSearchQuery);
+                        const matchClass = printSelectedClass === 'all' || std.classGroup === printSelectedClass;
+                        const matchGender = printSelectedGender === 'all' || std.gender === printSelectedGender;
+                        return matchSearch && matchClass && matchGender;
+                      }).length === 0 ? (
+                        <div className="col-span-2 py-12 text-center text-gray-400 text-xs font-sans">
+                          Tidak ditemukan data siswa berdasarkan pencarian atau filter Anda saat ini.
+                        </div>
+                      ) : (
+                        students.filter(std => {
+                          const matchSearch = std.name.toLowerCase().includes(printSearchQuery.toLowerCase()) || std.nisn.includes(printSearchQuery);
+                          const matchClass = printSelectedClass === 'all' || std.classGroup === printSelectedClass;
+                          const matchGender = printSelectedGender === 'all' || std.gender === printSelectedGender;
+                          return matchSearch && matchClass && matchGender;
+                        }).map((std) => {
+                          const isSelected = printSelectedStudentIds.includes(std.id);
+                          return (
+                            <div
+                              key={std.id}
+                              onClick={() => {
+                                if (isSelected) {
+                                  setPrintSelectedStudentIds(printSelectedStudentIds.filter(id => id !== std.id));
+                                } else {
+                                  setPrintSelectedStudentIds([...printSelectedStudentIds, std.id]);
+                                }
+                              }}
+                              className={`relative rounded-2xl border p-4 cursor-pointer transition-all hover:shadow-md select-none ${
+                                isSelected 
+                                  ? 'border-emerald-500 bg-emerald-50/20 shadow-xs' 
+                                  : 'border-gray-250 bg-white hover:border-gray-350 opacity-60 hover:opacity-100'
+                              }`}
+                            >
+                              
+                              {/* Preview Checkbox selection Badge on Top-Right */}
+                              <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${isSelected ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                                  {isSelected ? 'Cetak' : 'Lewati'}
+                                </span>
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => {}} // Swallowed by div onClick
+                                  className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 pointer-events-none"
+                                />
+                              </div>
+
+                              {/* Physical Card Layout Container */}
+                              <div className="border border-emerald-900 rounded-lg overflow-hidden bg-white shadow-xs text-left p-2.5">
+                                
+                                {/* KOP KARTU */}
+                                {printShowKop && (
+                                  <div className="flex items-center gap-2 pb-1.5 border-b-2 border-emerald-800">
+                                    <div className="w-[34px] h-[34px] rounded-full border border-emerald-800 p-[1.5px] bg-white flex items-center justify-center shrink-0">
+                                      {logoImg ? (
+                                        <img src={logoImg} className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
+                                      ) : (
+                                        <div className="w-full h-full rounded-full bg-emerald-700 text-white flex items-center justify-center font-bold text-[9px] font-mono">MA</div>
+                                      )}
+                                    </div>
+                                    <div className="leading-tight flex-1 text-center pr-[34px]">
+                                      <h5 className="text-[7.5px] font-bold text-emerald-950 tracking-wider font-sans">Kementerian Agama Republik Indonesia</h5>
+                                      <h6 className="text-[10px] font-black text-gray-900 uppercase tracking-wide font-display text-emerald-900 mt-0.5">MA ANNURIYYAH</h6>
+                                      <p className="text-[7.5px] text-gray-500 font-sans font-bold mt-0.5">Asesmen Madrasah (AM) Berbasis CBT</p>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* CARD CONTENT BODY */}
+                                <div className="mt-2.5 grid grid-cols-5 gap-2 text-[10px]">
+                                  
+                                  {/* Student Data Fields (Left 3.5 Columns) */}
+                                  <div className="col-span-3.5 space-y-1 text-gray-700 font-sans leading-tight">
+                                    <table className="w-full text-left text-[9px] border-collapse">
+                                      <tbody>
+                                        <tr>
+                                          <td className="py-0.5 font-bold text-gray-400 w-16 uppercase text-[7.5px] tracking-wider">Sesi</td>
+                                          <td className="py-0.5 text-gray-800 font-mono font-medium">: {printDefaultSession}</td>
+                                        </tr>
+                                        <tr>
+                                          <td className="py-0.5 font-bold text-gray-400 uppercase text-[7.5px] tracking-wider">NISN / UID</td>
+                                          <td className="py-0.5 font-mono font-bold text-gray-800">: {std.nisn}</td>
+                                        </tr>
+                                        <tr>
+                                          <td className="py-0.5 font-bold text-gray-400 uppercase text-[7.5px] tracking-wider">Nama</td>
+                                          <td className="py-0.5 font-black uppercase text-emerald-900 text-[9.5px] truncate max-w-[120px]">: {std.name}</td>
+                                        </tr>
+                                        <tr>
+                                          <td className="py-0.5 font-bold text-gray-400 uppercase text-[7.5px] tracking-wider">Kelas/Rng</td>
+                                          <td className="py-0.5 font-semibold text-gray-850">: {std.classGroup} / {printDefaultRoom}</td>
+                                        </tr>
+                                      </tbody>
+                                    </table>
+
+                                    {/* Kredensial Box */}
+                                    <div className="bg-gray-50 border border-gray-150 rounded-lg p-1 text-[8px] grid grid-cols-2 mt-1.5 font-sans">
+                                      <div>
+                                        <span className="text-[6.5px] uppercase font-bold text-gray-400 block tracking-wider">Username</span>
+                                        <code className="font-mono text-emerald-800 font-bold block bg-emerald-50 rounded-sm px-1 py-0.5 w-fit mt-0.5 text-[8.5px]">{std.username}</code>
+                                      </div>
+                                      <div>
+                                        <span className="text-[6.5px] uppercase font-bold text-gray-400 block tracking-wider">Password</span>
+                                        <code className="font-mono text-gray-700 font-bold block bg-gray-100 rounded px-1 py-0.5 w-fit mt-0.5 text-[8.5px]">{std.password || '123456'}</code>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Box Photo/Signature (Right 1.5 Columns) */}
+                                  <div className="col-span-1.5 flex flex-col justify-between items-center text-center">
+                                    {printShowPhotoPlaceholder ? (
+                                      <div className="w-[38px] h-[50px] border border-emerald-800/30 rounded-sm flex flex-col justify-center items-center bg-white p-[1px] overflow-hidden">
+                                        {logoImg ? (
+                                          <img src={logoImg} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                                        ) : (
+                                          <span className="text-[6px] uppercase font-bold leading-none font-mono text-gray-400">3x4</span>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="h-4"></div>
+                                    )}
+
+                                    {/* Small Principal Signature Area */}
+                                    {printShowTtd && (
+                                      <div className="text-[6.5px] text-gray-650 leading-tight w-full mt-1">
+                                      <span className="block font-sans">Panitia,</span>
+                                      <span className="block italic text-gray-300 mt-1.5 font-mono text-[5.5px]">(Ttd & Cap)</span>
+                                      <span className="block font-bold underline text-emerald-950 mt-0.5 font-sans truncate">{printPrincipal}</span>
+                                      {printNip && printNip.trim() !== '' && printNip.trim() !== '-' && (
+                                        <span className="block text-gray-400 truncate font-sans text-[5.8px]">NIP. {printNip}</span>
+                                      )}
+                                    </div>
+                                    )}
+                                  </div>
+
+                                </div>
+
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
             </div>
           )}
 
@@ -2441,50 +3278,79 @@ export default function TeacherDashboard({
               
               {/* Add Exam Package Form */}
               <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider font-mono">
-                      Buat Paket Ujian Baru
-                    </h3>
-                    <p className="text-xs text-gray-400 mt-0.5 font-sans">Mendukung pembuatan kosong atau diimpor langsung dengan isi butir soal dari file.</p>
+                <button
+                  type="button"
+                  onClick={() => setShowAddExamForm(!showAddExamForm)}
+                  className="flex items-center justify-between w-full text-left focus:outline-none group cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-emerald-50 rounded-2xl text-emerald-600 transition-colors group-hover:bg-emerald-100 flex items-center justify-center">
+                      <Plus className={`w-4 h-4 transition-transform duration-300 ${showAddExamForm ? 'rotate-45 text-red-650' : ''}`} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-extrabold text-gray-800 uppercase tracking-wider mb-0.5 font-mono">
+                        Buat Paket Ujian Baru
+                      </h3>
+                      <p className="text-[11px] text-gray-400 font-sans font-medium normal-case">
+                        {showAddExamForm ? 'Klik untuk menutup formulir paket ujian' : 'Klik untuk membuat/mengimpor paket ujian baru'}
+                      </p>
+                    </div>
                   </div>
+                  <span className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition-all ${
+                    showAddExamForm 
+                      ? 'bg-gray-50 border-gray-250 text-gray-550' 
+                      : 'bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-600/10 hover:bg-emerald-700'
+                  }`}>
+                    {showAddExamForm ? 'Sembunyikan' : 'Buka Formulir'}
+                  </span>
+                </button>
 
-                  {/* Switcher Metode Pembuatan Paket */}
-                  <div className="flex bg-gray-100 p-1 rounded-xl self-start sm:self-center border border-gray-200">
-                    <button
-                      onClick={() => {
-                        setExamCreationMethod('manual');
-                        setNewExamFileError(null);
-                        setNewExamFileSuccess(null);
-                      }}
-                      type="button"
-                      className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                        examCreationMethod === 'manual'
-                          ? 'bg-white text-emerald-850 shadow-xs border border-gray-200/50'
-                          : 'text-gray-500 hover:text-gray-800'
-                      }`}
-                    >
-                      ✍️ Buat Kosong
-                    </button>
-                    <button
-                      onClick={() => {
-                        setExamCreationMethod('upload');
-                        setNewExamFileError(null);
-                        setNewExamFileSuccess(null);
-                      }}
-                      type="button"
-                      className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                        examCreationMethod === 'upload'
-                          ? 'bg-white text-emerald-850 shadow-xs border border-gray-200/50'
-                          : 'text-gray-500 hover:text-gray-800'
-                      }`}
-                    >
-                      📤 Impor Langsung File
-                    </button>
-                  </div>
-                </div>
+                {showAddExamForm && (
+                  <div className="mt-6 pt-6 border-t border-gray-100">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                      <div>
+                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider font-mono">
+                          Konfigurasi Paket Ujian
+                        </h4>
+                        <p className="text-[11px] text-gray-400 mt-0.5 font-sans">Mendukung pembuatan kosong atau diimpor langsung dengan isi butir soal dari file.</p>
+                      </div>
 
-                <form onSubmit={handleAddExam} className="space-y-6">
+                      {/* Switcher Metode Pembuatan Paket */}
+                      <div className="flex bg-gray-100 p-1 rounded-xl self-start sm:self-center border border-gray-200">
+                        <button
+                          onClick={() => {
+                            setExamCreationMethod('manual');
+                            setNewExamFileError(null);
+                            setNewExamFileSuccess(null);
+                          }}
+                          type="button"
+                          className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                            examCreationMethod === 'manual'
+                              ? 'bg-white text-emerald-850 shadow-xs border border-gray-200/50'
+                              : 'text-gray-500 hover:text-gray-800'
+                          }`}
+                        >
+                          ✍️ Buat Kosong
+                        </button>
+                        <button
+                          onClick={() => {
+                            setExamCreationMethod('upload');
+                            setNewExamFileError(null);
+                            setNewExamFileSuccess(null);
+                          }}
+                          type="button"
+                          className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                            examCreationMethod === 'upload'
+                              ? 'bg-white text-emerald-850 shadow-xs border border-gray-200/50'
+                              : 'text-gray-500 hover:text-gray-800'
+                          }`}
+                        >
+                          📤 Impor Langsung File
+                        </button>
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleAddExam} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="md:col-span-2">
                       <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider mb-1">
@@ -2743,105 +3609,160 @@ export default function TeacherDashboard({
                   <div className="flex justify-end border-t border-gray-100 pt-4">
                     <button
                       type="submit"
-                      className="py-2.5 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all uppercase flex items-center justify-center gap-1.5"
+                      className="py-2.5 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all uppercase flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                     >
                       <Plus className="w-4 h-4" />
                       {examCreationMethod === 'upload' ? 'Buat Paket & Impor Soal' : 'Buat Paket Ujian'}
                     </button>
                   </div>
                 </form>
+                  </div>
+                )}
               </div>
 
               {/* Grid of Exams List */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {exams.map((ex) => {
-                  const isSelectForQ = selectedExamIdForQuestions === ex.id;
-                  return (
-                    <div
-                      key={ex.id}
-                      className={`p-5 rounded-3xl border transition-all ${
-                        isSelectForQ
-                          ? 'bg-gradient-to-br from-white to-emerald-50/20 border-emerald-500'
-                          : 'bg-white border-gray-100 hover:border-gray-200 shadow-5xs'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2.5 mb-2">
-                        <div className="flex flex-wrap gap-1">
-                          <span className="p-1 px-2.5 rounded-lg bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">
-                            {ex.subject}
-                          </span>
-                          <span className={`p-1 px-2.5 rounded-lg text-[10px] font-bold tracking-wider uppercase border ${
-                            !ex.targetClass || ex.targetClass === 'Semua Kelas'
-                              ? 'bg-blue-50 text-blue-700 border-blue-100/50'
-                              : 'bg-amber-50 text-amber-800 border-amber-150'
-                          }`}>
-                            🎯 {ex.targetClass || 'Semua Kelas'}
-                          </span>
-                        </div>
+              <div className="space-y-4">
+                <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider font-mono">
+                      Daftar Paket Ujian / Bank Soal
+                    </h3>
+                    <p className="text-[11px] text-gray-400 mt-0.5 font-sans">Menampilkan semua paket ujian yang terdaftar.</p>
+                  </div>
+                  <div className="relative w-full sm:w-80">
+                    <input
+                      type="text"
+                      value={examSearch}
+                      onChange={(e) => setExamSearch(e.target.value)}
+                      placeholder="Cari judul ujian, mata pelajaran, kelas..."
+                      className="w-full pl-9 pr-8 py-2 text-xs bg-gray-50 hover:bg-gray-100 focus:bg-white border border-gray-200 focus:border-emerald-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all font-sans"
+                    />
+                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                    {examSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setExamSearch('')}
+                        className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-650 cursor-pointer font-bold text-xs"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => setSelectedExamIdForQuestions(ex.id)}
-                            className={`p-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 ${
-                              isSelectForQ
-                                ? 'bg-emerald-600 text-white'
-                                : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
-                            }`}
-                            title="Kelola Butir Soal"
-                          >
-                            <Eye className="w-4 h-4" />
-                            Kelola Soal
-                          </button>
-                          {currentUserRole === 'admin' && (
-                            <button
-                              onClick={() => handleDeleteExam(ex.id)}
-                              className="p-1.5 text-red-650 hover:bg-red-50 rounded-xl transition-all"
-                              title="Hapus Paket"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                {exams.filter((ex) => {
+                  const s = examSearch.toLowerCase();
+                  return ex.title.toLowerCase().includes(s) ||
+                         ex.subject.toLowerCase().includes(s) ||
+                         (ex.targetClass || '').toLowerCase().includes(s);
+                }).length === 0 ? (
+                  <div className="bg-white rounded-3xl p-8 text-center text-gray-400 border border-gray-100 shadow-xs font-sans text-xs">
+                    Tidak ditemukan paket ujian / bank soal yang cocok dengan kata pencarian Anda.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {exams.filter((ex) => {
+                      const s = examSearch.toLowerCase();
+                      return ex.title.toLowerCase().includes(s) ||
+                             ex.subject.toLowerCase().includes(s) ||
+                             (ex.targetClass || '').toLowerCase().includes(s);
+                    }).map((ex) => {
+                      const isSelectForQ = selectedExamIdForQuestions === ex.id;
+                      return (
+                        <div
+                          key={ex.id}
+                          className={`p-5 rounded-3xl border transition-all ${
+                            isSelectForQ
+                              ? 'bg-gradient-to-br from-white to-emerald-50/20 border-emerald-500'
+                              : 'bg-white border-gray-100 hover:border-gray-200 shadow-5xs'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2.5 mb-2">
+                            <div className="flex flex-wrap gap-1">
+                              <span className="p-1 px-2.5 rounded-lg bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">
+                                {ex.subject}
+                              </span>
+                              <span className={`p-1 px-2.5 rounded-lg text-[10px] font-bold tracking-wider uppercase border ${
+                                !ex.targetClass || ex.targetClass === 'Semua Kelas'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-100/50'
+                                  : 'bg-amber-50 text-amber-800 border-amber-150'
+                              }`}>
+                                🎯 {ex.targetClass || 'Semua Kelas'}
+                              </span>
+                            </div>
 
-                      <h4 className="text-base font-bold text-gray-800 tracking-tight leading-snug">
-                        {ex.title}
-                      </h4>
-
-                      <div className="flex justify-between items-center text-xs mt-4 pt-4 border-t border-gray-100 text-gray-500">
-                        <span className="font-semibold font-mono text-emerald-700">
-                          {ex.questions.length} Butir Soal
-                        </span>
-                        <span>
-                          Durasi: <strong className="text-gray-700">{ex.durationMinutes} Menit</strong>
-                        </span>
-                      </div>
-
-                      <div className="mt-3 flex items-center justify-between bg-gray-50/70 hover:bg-gray-50 p-2 px-3 rounded-2xl border border-gray-150/40 text-[11px] transition-all">
-                        <div className="flex items-center gap-1.5 w-full">
-                          <span className="font-bold text-gray-400 uppercase tracking-wide text-[9px] shrink-0 font-mono">Bagi Ke:</span>
-                          <select
-                            value={ex.targetClass || 'Semua Kelas'}
-                            onChange={(e) => {
-                              const updatedClass = e.target.value;
-                              onUpdateExams(
-                                exams.map((exam) =>
-                                  exam.id === ex.id ? { ...exam, targetClass: updatedClass } : exam
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => setSelectedExamIdForQuestions(ex.id)}
+                                className={`p-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 ${
+                                  isSelectForQ
+                                    ? 'bg-emerald-600 text-white'
+                                    : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                                }`}
+                                title="Kelola Butir Soal"
+                              >
+                                <Eye className="w-4 h-4" />
+                                Kelola Soal
+                              </button>
+                              {currentUserRole === 'admin' && (
+                                !isExamPermanent(ex) ? (
+                                  <button
+                                    onClick={() => handleDeleteExam(ex.id)}
+                                    className="p-1.5 text-red-650 hover:bg-red-50 rounded-xl transition-all"
+                                    title="Hapus Paket"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                ) : (
+                                  <span className="text-[10.5px] text-emerald-650 bg-emerald-50 border border-emerald-100/55 px-2 py-0.5 rounded-md font-bold tracking-tight">
+                                    Permanen
+                                  </span>
                                 )
-                              );
-                            }}
-                            className="bg-transparent text-gray-700 font-bold focus:outline-none cursor-pointer w-full text-left"
-                          >
-                            <option value="Semua Kelas">Semua Kelas (Umum)</option>
-                            {uniqueClasses.map((cls) => (
-                              <option key={cls} value={cls}>{cls}</option>
-                            ))}
-                          </select>
+                              )}
+                            </div>
+                          </div>
+
+                          <h4 className="text-base font-bold text-gray-800 tracking-tight leading-snug">
+                            {ex.title}
+                          </h4>
+
+                          <div className="flex justify-between items-center text-xs mt-4 pt-4 border-t border-gray-100 text-gray-500">
+                            <span className="font-semibold font-mono text-emerald-700">
+                              {ex.questions.length} Butir Soal
+                            </span>
+                            <span>
+                              Durasi: <strong className="text-gray-700">{ex.durationMinutes} Menit</strong>
+                            </span>
+                          </div>
+
+                          <div className="mt-3 flex items-center justify-between bg-gray-50/70 hover:bg-gray-50 p-2 px-3 rounded-2xl border border-gray-150/40 text-[11px] transition-all">
+                            <div className="flex items-center gap-1.5 w-full">
+                              <span className="font-bold text-gray-400 uppercase tracking-wide text-[9px] shrink-0 font-mono">Bagi Ke:</span>
+                              <select
+                                disabled={isExamPermanent(ex)}
+                                value={ex.targetClass || 'Semua Kelas'}
+                                onChange={(e) => {
+                                  const updatedClass = e.target.value;
+                                  onUpdateExams(
+                                    exams.map((exam) =>
+                                      exam.id === ex.id ? { ...exam, targetClass: updatedClass } : exam
+                                    )
+                                  );
+                                }}
+                                className={`bg-transparent text-gray-700 font-bold focus:outline-none w-full text-left ${isExamPermanent(ex) ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
+                              >
+                                <option value="Semua Kelas">Semua Kelas (Umum)</option>
+                                {uniqueClasses.map((cls) => (
+                                  <option key={cls} value={cls}>{cls}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Question Editor section for selected exam */}
@@ -2862,7 +3783,19 @@ export default function TeacherDashboard({
                     </button>
                   </div>
 
-                  {/* Selector Metode Input */}
+                  {isExamPermanent(exams.find((ex) => ex.id === selectedExamIdForQuestions)) ? (
+                    <div className="mb-8 p-5 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-3 font-sans">
+                      <span className="text-xl">🔒</span>
+                      <div>
+                        <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wide">Paket Ujian Bersifat Permanen</h4>
+                        <p className="text-xs text-amber-850 mt-1 leading-relaxed font-semibold">
+                          Butir soal pada paket ini dikunci oleh sistem aplikasi. Data soal tidak dapat ditambah, diubah, maupun dihapus.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Selector Metode Input */}
                   <div className="flex flex-col sm:flex-row gap-2 mb-6">
                     <button
                       onClick={() => {
@@ -3225,6 +4158,9 @@ Kunci: D`}
                     </div>
                   )}
 
+                    </>
+                  )}
+
                   {/* Existing questions preview list */}
                   <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono mb-4">
                     Butir Soal yang Tersimpan ({exams.find((ex) => ex.id === selectedExamIdForQuestions)?.questions.length})
@@ -3238,13 +4174,15 @@ Kunci: D`}
                     ) : (
                       exams.find((ex) => ex.id === selectedExamIdForQuestions)?.questions.map((question, idx) => (
                         <div key={question.id} className="p-4 rounded-2xl border border-gray-150 relative bg-white hover:shadow-2xs">
-                          <button
-                            onClick={() => handleDeleteQuestion(question.id)}
-                            className="absolute top-3 right-3 p-1.5 text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                            title="Hapus Soal"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {!isExamPermanent(exams.find((ex) => ex.id === selectedExamIdForQuestions)) && (
+                            <button
+                              onClick={() => handleDeleteQuestion(question.id)}
+                              className="absolute top-3 right-3 p-1.5 text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                              title="Hapus Soal"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
 
                           <div className="text-xs font-bold text-emerald-800 font-mono">
                             SOAL NOMOR #{idx + 1}
@@ -3289,12 +4227,32 @@ Kunci: D`}
             <div className="space-y-6">
               
               <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                   <div>
                     <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider font-mono">
                       Kontrol Sesi & Token Ujian Aktif
                     </h3>
-                    <p className="text-xs text-gray-400 mt-0.5">Atur status keaktifan paket ujian di akun siswa dan acak token disini.</p>
+                    <p className="text-xs text-gray-400 mt-0.5 font-sans">Atur status keaktifan paket ujian di akun siswa dan acak token disini.</p>
+                  </div>
+                  {/* Search Bar */}
+                  <div className="relative w-full md:w-80">
+                    <input
+                      type="text"
+                      value={tokenSearch}
+                      onChange={(e) => setTokenSearch(e.target.value)}
+                      placeholder="Cari nama ujian, mapel, token..."
+                      className="w-full pl-9 pr-8 py-2 text-xs bg-gray-50 hover:bg-gray-100 focus:bg-white border border-gray-200 focus:border-emerald-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all font-sans"
+                    />
+                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                    {tokenSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setTokenSearch('')}
+                        className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-650 cursor-pointer font-bold text-xs"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -3310,46 +4268,64 @@ Kunci: D`}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-gray-700">
-                      {exams.map((ex) => (
-                        <tr key={ex.id} className="hover:bg-gray-50/50">
-                          <td className="py-4">
-                            <strong className="text-gray-800 block text-sm tracking-tight leading-snug">{ex.title}</strong>
-                            <span className="text-[10px] text-gray-400 block font-mono">{ex.questions.length} Soal | {ex.durationMinutes} Menit</span>
-                          </td>
-                          <td>
-                            <span className="p-1 px-2 rounded-lg bg-emerald-50 text-emerald-800 text-[10px] font-bold uppercase">
-                              {ex.subject}
-                            </span>
-                          </td>
-                          <td>
-                            <button
-                              onClick={() => handleToggleExamActive(ex.id)}
-                              className={`p-1 px-3.5 rounded-full text-xs font-bold transition-all ${
-                                ex.isActive
-                                  ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800'
-                                  : 'bg-red-50 hover:bg-red-100 text-red-800'
-                              }`}
-                            >
-                              {ex.isActive ? 'Sudah Aktif' : 'Nonaktif'}
-                            </button>
-                          </td>
-                          <td className="text-center font-mono">
-                            <span className="p-1 px-3.5 bg-amber-50 rounded-xl text-amber-700 font-extrabold text-sm tracking-widest border border-amber-100 shadow-3xs">
-                              {ex.token}
-                            </span>
-                          </td>
-                          <td className="text-right">
-                            <button
-                              onClick={() => handleRandomizeToken(ex.id)}
-                              className="p-1.5 font-semibold bg-gray-100 hover:bg-emerald-50 rounded-xl hover:text-emerald-700 text-gray-500 transition-all flex items-center gap-1 text-xs ml-auto"
-                              title="Hubungkan token baru"
-                            >
-                              <RotateCw className="w-3.5 h-3.5" />
-                              Acak Token
-                            </button>
+                      {exams.filter((ex) => {
+                        const s = tokenSearch.toLowerCase();
+                        return ex.title.toLowerCase().includes(s) ||
+                               ex.subject.toLowerCase().includes(s) ||
+                               (ex.token || '').toLowerCase().includes(s);
+                      }).length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-8 text-center text-gray-400 font-sans text-xs">
+                            Tidak ditemukan data kontrol aktifitas token yang cocok dengan kata pencarian Anda.
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        exams.filter((ex) => {
+                          const s = tokenSearch.toLowerCase();
+                          return ex.title.toLowerCase().includes(s) ||
+                                 ex.subject.toLowerCase().includes(s) ||
+                                 (ex.token || '').toLowerCase().includes(s);
+                        }).map((ex) => (
+                          <tr key={ex.id} className="hover:bg-gray-50/50">
+                            <td className="py-4">
+                              <strong className="text-gray-800 block text-sm tracking-tight leading-snug">{ex.title}</strong>
+                              <span className="text-[10px] text-gray-400 block font-mono">{ex.questions.length} Soal | {ex.durationMinutes} Menit</span>
+                            </td>
+                            <td>
+                              <span className="p-1 px-2 rounded-lg bg-emerald-50 text-emerald-800 text-[10px] font-bold uppercase">
+                                {ex.subject}
+                              </span>
+                            </td>
+                            <td>
+                              <button
+                                onClick={() => handleToggleExamActive(ex.id)}
+                                className={`p-1 px-3.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                                  ex.isActive
+                                    ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800'
+                                    : 'bg-red-50 hover:bg-red-100 text-red-800'
+                                }`}
+                              >
+                                {ex.isActive ? 'Sudah Aktif' : 'Nonaktif'}
+                              </button>
+                            </td>
+                            <td className="text-center font-mono">
+                              <span className="p-1 px-3.5 bg-amber-50 rounded-xl text-amber-700 font-extrabold text-sm tracking-widest border border-amber-100 shadow-3xs">
+                                {ex.token}
+                              </span>
+                            </td>
+                            <td className="text-right">
+                              <button
+                                onClick={() => handleRandomizeToken(ex.id)}
+                                className="p-1.5 font-semibold bg-gray-100 hover:bg-emerald-50 rounded-xl hover:text-emerald-700 text-gray-500 transition-all flex items-center gap-1 text-xs ml-auto cursor-pointer"
+                                title="Hubungkan token baru"
+                              >
+                                <RotateCw className="w-3.5 h-3.5" />
+                                Acak Token
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -3362,74 +4338,129 @@ Kunci: D`}
             <div className="space-y-6">
               
               {/* Tool Sinkronisasi & Impor Hasil Offline */}
-              <div className="bg-gradient-to-r from-amber-50 to-amber-100/30 rounded-3xl p-5 border border-amber-200/50 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4 font-sans mb-6">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="p-1 px-2.5 rounded-lg bg-amber-200 text-amber-900 text-[10px] font-extrabold uppercase tracking-wider">
-                      OFFLINE INTEGRATION TOOL
-                    </span>
-                    <span className="text-xs font-bold text-amber-800">
-                      Sinkronisasi & Impor Hasil Ujian Mandiri
-                    </span>
+              <div className="bg-gradient-to-r from-amber-50 to-amber-100/30 rounded-3xl p-5 border border-amber-200/50 shadow-xs mb-6 font-sans">
+                <button
+                  type="button"
+                  onClick={() => setShowOfflineIntegration(!showOfflineIntegration)}
+                  className="flex items-center justify-between w-full text-left focus:outline-none group cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-amber-100 text-amber-800 rounded-2xl transition-colors group-hover:bg-amber-200/80 flex items-center justify-center">
+                      <Plus className={`w-4 h-4 transition-transform duration-300 ${showOfflineIntegration ? 'rotate-45 text-red-600' : ''}`} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-extrabold text-amber-900 uppercase tracking-wider mb-0.5 font-mono flex items-center gap-2">
+                        OFFLINE INTEGRATION TOOL
+                      </h3>
+                      <p className="text-[11px] text-amber-800/80 font-sans font-medium normal-case">
+                        {showOfflineIntegration ? 'Klik untuk menutup modul sinkronisasi & impor' : 'Klik untuk membuka modul sinkronisasi & impor hasil offline'}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-650 leading-relaxed max-w-2xl">
-                    Sekolah tanpa internet? Guru bisa mengambil berkas hasil (<strong className="font-mono">HASIL_CBT_*.json</strong>) yang diunduh siswa dari komputernya lewat flashdisk/USB, lalu klik tombol impor di bawah ini untuk menggabungkan seluruh hasil ke rekap utama. Anda juga bisa mengekspor database lokal komputer ini.
-                  </p>
-                </div>
+                  <span className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition-all ${
+                    showOfflineIntegration 
+                      ? 'bg-gray-50/50 border-gray-250 text-gray-550' 
+                      : 'bg-amber-600 border-amber-600 text-white shadow-md shadow-amber-600/10 hover:bg-amber-700'
+                  }`}>
+                    {showOfflineIntegration ? 'Sembunyikan' : 'Buka Alat'}
+                  </span>
+                </button>
 
-                <div className="flex flex-wrap gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setShowTechnicianGuide(true)}
-                    className="bg-amber-100/80 hover:bg-amber-200 text-amber-900 border border-amber-300 py-2 px-3 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-                    title="Lihat Buku Manual setting jaringan PC, HP, dan Alur Ujian Offline"
-                  >
-                    📖 Panduan Teknisi
-                  </button>
+                {showOfflineIntegration && (
+                  <div className="mt-5 pt-5 border-t border-amber-200/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <span className="text-xs font-bold text-amber-800 block">
+                        Sinkronisasi & Impor Hasil Ujian Mandiri
+                      </span>
+                      <p className="text-xs text-gray-650 leading-relaxed max-w-2xl">
+                        Sekolah tanpa internet? Guru bisa mengambil berkas hasil (<strong className="font-mono">HASIL_CBT_*.json</strong>) yang diunduh siswa dari komputernya lewat flashdisk/USB, lalu klik tombol impor di bawah ini untuk menggabungkan seluruh hasil ke rekap utama. Anda juga bisa mengekspor database lokal komputer ini.
+                      </p>
+                    </div>
 
-                  <label className="bg-amber-600 hover:bg-amber-700 text-white py-2 px-4 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 shadow-sm hover:shadow-md cursor-pointer select-none">
-                    📥 Impor Berkas Siswa (.json)
-                    <input
-                      type="file"
-                      accept=".json"
-                      onChange={handleImportOfflineFiles}
-                      multiple
-                      className="hidden"
-                    />
-                  </label>
-                  
-                  <button
-                    type="button"
-                    onClick={handleBackupComputerDatabase}
-                    className="bg-zinc-800 hover:bg-zinc-900 text-amber-300 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-zinc-700 cursor-pointer text-center shadow-sm"
-                    title="Unduh semua database rekap, bank soal, dan siswa di komputer ini"
-                  >
-                    💾 Cadangkan Database (.json)
-                  </button>
-                </div>
+                    <div className="flex flex-wrap gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setShowTechnicianGuide(true)}
+                        className="bg-amber-100/80 hover:bg-amber-200 text-amber-900 border border-amber-300 py-2 px-3 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                        title="Lihat Buku Manual setting jaringan PC, HP, dan Alur Ujian Offline"
+                      >
+                        📖 Panduan Teknisi
+                      </button>
+
+                      <label className="bg-amber-600 hover:bg-amber-700 text-white py-2 px-4 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 shadow-sm hover:shadow-md cursor-pointer select-none active:scale-95">
+                        📥 Impor Berkas Siswa (.json)
+                        <input
+                          type="file"
+                          accept=".json"
+                          onChange={handleImportOfflineFiles}
+                          multiple
+                          className="hidden"
+                        />
+                      </label>
+                      
+                      <button
+                        type="button"
+                        onClick={handleBackupComputerDatabase}
+                        className="bg-zinc-800 hover:bg-zinc-900 text-amber-300 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-zinc-700 cursor-pointer text-center shadow-sm active:scale-95"
+                        title="Unduh semua database rekap, bank soal, dan siswa di komputer ini"
+                      >
+                        💾 Cadangkan Database (.json)
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-2 border-b border-gray-50">
-                  <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider font-mono">
-                    Rekapitulasi Hasil Jawaban Siswa
-                  </h3>
-                  {results.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={handlePrintRecap}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer font-sans"
-                      >
-                        🖨️ Cetak Rekap Nilai (PDF)
-                      </button>
-                      <button
-                        onClick={handleExportResultsCSV}
-                        className="bg-blue-600 hover:bg-blue-700 text-white py-1.5 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer font-sans"
-                      >
-                        📊 Ekspor ke Excel (.CSV)
-                      </button>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 pb-2 border-b border-gray-50">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider font-mono">
+                        Rekapitulasi Hasil Jawaban Siswa
+                      </h3>
+                      <p className="text-[11px] text-gray-400 mt-0.5">Melihat daftar siswa yang telah menuntaskan pengerjaan ujian.</p>
                     </div>
-                  )}
+
+                    <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                      {/* Search Bar */}
+                      <div className="relative w-full sm:w-64">
+                        <input
+                          type="text"
+                          value={resultSearch}
+                          onChange={(e) => setResultSearch(e.target.value)}
+                          placeholder="Cari nama, NISN, mapel, kelas..."
+                          className="w-full pl-9 pr-8 py-2 text-xs bg-gray-50 hover:bg-gray-100 focus:bg-white border border-gray-200 focus:border-emerald-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all font-sans"
+                        />
+                        <Search className="w-4 h-4 text-gray-450 absolute left-3 top-2.5" />
+                        {resultSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setResultSearch('')}
+                            className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-650 cursor-pointer font-bold text-xs"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+
+                      {results.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={handlePrintRecap}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer font-sans"
+                          >
+                            🖨️ Cetak Rekap Nilai (PDF)
+                          </button>
+                          <button
+                            onClick={handleExportResultsCSV}
+                            className="bg-blue-600 hover:bg-blue-700 text-white py-1.5 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer font-sans"
+                          >
+                            📊 Ekspor ke Excel (.CSV)
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -3445,14 +4476,28 @@ Kunci: D`}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-gray-700">
-                      {results.length === 0 ? (
+                      {results.filter((res) => {
+                        const s = resultSearch.toLowerCase();
+                        return res.studentName.toLowerCase().includes(s) ||
+                               res.studentNisn.toLowerCase().includes(s) ||
+                               (res.classGroup || '').toLowerCase().includes(s) ||
+                               res.examTitle.toLowerCase().includes(s) ||
+                               res.examSubject.toLowerCase().includes(s);
+                      }).length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="py-6 text-center text-gray-400">
-                            Belum ada rekap pengerjaan ujian siswa saat ini.
+                          <td colSpan={6} className="py-8 text-center text-gray-400 font-sans text-xs">
+                            Tidak ditemukan rekap pengerjaan ujian siswa yang cocok dengan kata pencarian Anda.
                           </td>
                         </tr>
                       ) : (
-                        results.map((res) => (
+                        results.filter((res) => {
+                          const s = resultSearch.toLowerCase();
+                          return res.studentName.toLowerCase().includes(s) ||
+                                 res.studentNisn.toLowerCase().includes(s) ||
+                                 (res.classGroup || '').toLowerCase().includes(s) ||
+                                 res.examTitle.toLowerCase().includes(s) ||
+                                 res.examSubject.toLowerCase().includes(s);
+                        }).map((res) => (
                           <tr key={res.id} className="hover:bg-gray-50/50">
                             <td className="py-4">
                               <div className="flex items-center gap-1.5 flex-wrap">
@@ -3495,13 +4540,13 @@ Kunci: D`}
                               <div className="flex gap-2 justify-end">
                                 <button
                                   onClick={() => setViewResultDetail(res)}
-                                  className="p-1 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                                  className="p-1 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
                                 >
                                   Detil
                                 </button>
                                 <button
                                   onClick={() => handleResetResult(res.id)}
-                                  className="p-1.5 text-red-600 hover:bg-red-55/40 hover:text-red-700 rounded-lg transition-all"
+                                  className="p-1.5 text-red-650 hover:bg-red-50 hover:text-red-700 rounded-lg transition-all cursor-pointer"
                                   title="Reset Nilai (Retake)"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -3521,37 +4566,59 @@ Kunci: D`}
           {/* TEACHERS/PROCTORS TAB */}
           {activeTab === 'teachers' && currentUserRole === 'admin' && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* Form Add Teacher */}
-                <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 self-start">
-                  <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-4 font-mono flex items-center gap-1.5">
-                    <Plus className="w-4 h-4 text-emerald-600" />
-                    Tambah Guru / Pengawas Baru
-                  </h3>
-
-                  {teacherError && (
-                    <div className="p-3.5 bg-red-50 border border-red-100 text-xs text-red-650 rounded-xl mb-4 font-sans">
-                      {teacherError}
+              
+              {/* Form Add Teacher */}
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddTeacherForm(!showAddTeacherForm)}
+                  className="flex items-center justify-between w-full text-left focus:outline-none group cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-emerald-50 rounded-2xl text-emerald-600 transition-colors group-hover:bg-emerald-100 flex items-center justify-center">
+                      <Plus className={`w-4 h-4 transition-transform duration-300 ${showAddTeacherForm ? 'rotate-45 text-red-650' : ''}`} />
                     </div>
-                  )}
-
-                  <form onSubmit={handleAddTeacher} className="space-y-4">
                     <div>
-                      <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider font-mono mb-1">
-                        Nama Lengkap
-                      </label>
-                      <input
-                        type="text"
-                        value={newTeacherName}
-                        onChange={(e) => setNewTeacherName(e.target.value)}
-                        placeholder="Contoh: Drs. H. Musthofa, M.Pd"
-                        className="w-full px-3.5 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-sans"
-                        required
-                      />
+                      <h3 className="text-sm font-extrabold text-gray-800 uppercase tracking-wider mb-0.5 font-mono">
+                        Tambah Guru / Pengawas Baru
+                      </h3>
+                      <p className="text-[11px] text-gray-400 font-sans font-medium normal-case">
+                        {showAddTeacherForm ? 'Klik untuk menutup formulir pengawas baru' : 'Klik untuk mendaftarkan guru/pengawas baru'}
+                      </p>
                     </div>
+                  </div>
+                  <span className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition-all ${
+                    showAddTeacherForm 
+                      ? 'bg-gray-50 border-gray-250 text-gray-550' 
+                      : 'bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-600/10 hover:bg-emerald-700'
+                  }`}>
+                    {showAddTeacherForm ? 'Sembunyikan' : 'Buka Formulir'}
+                  </span>
+                </button>
 
-                    <div className="grid grid-cols-2 gap-3">
+                {showAddTeacherForm && (
+                  <div className="mt-6 pt-6 border-t border-gray-100">
+                    {teacherError && (
+                      <div className="p-3.5 bg-red-50 border border-red-100 text-xs text-red-650 rounded-xl mb-4 font-sans">
+                        {teacherError}
+                      </div>
+                    )}
+
+                    <form onSubmit={handleAddTeacher} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider font-mono mb-1">
+                          Nama Lengkap
+                        </label>
+                        <input
+                          type="text"
+                          value={newTeacherName}
+                          onChange={(e) => setNewTeacherName(e.target.value)}
+                          placeholder="Contoh: Drs. H. Musthofa, M.Pd"
+                          className="w-full px-3.5 py-2.5 text-xs bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-sans"
+                          required
+                        />
+                      </div>
+
                       <div>
                         <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider font-mono mb-1">
                           Username
@@ -3561,10 +4628,11 @@ Kunci: D`}
                           value={newTeacherUser}
                           onChange={(e) => setNewTeacherUser(e.target.value)}
                           placeholder="contoh: musthofa"
-                          className="w-full px-3.5 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-sans"
+                          className="w-full px-3.5 py-2.5 text-xs bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-sans"
                           required
                         />
                       </div>
+
                       <div>
                         <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider font-mono mb-1">
                           Password
@@ -3574,117 +4642,154 @@ Kunci: D`}
                           value={newTeacherPass}
                           onChange={(e) => setNewTeacherPass(e.target.value)}
                           placeholder="••••"
-                          className="w-full px-3.5 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-sans"
+                          className="w-full px-3.5 py-2.5 text-xs bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-sans"
                           required
                         />
                       </div>
-                    </div>
 
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider font-mono mb-1">
-                        Hak Akses (Role)
-                      </label>
-                      <select
-                        value={newTeacherRole}
-                        onChange={(e) => setNewTeacherRole(e.target.value as 'admin' | 'proctor')}
-                        className="w-full px-3.5 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-sans"
+                      <div className="md:col-span-3">
+                        <label className="block text-[10px] font-bold text-gray-450 uppercase tracking-wider font-mono mb-1">
+                          Hak Akses (Role)
+                        </label>
+                        <select
+                          value={newTeacherRole}
+                          onChange={(e) => setNewTeacherRole(e.target.value as 'admin' | 'proctor')}
+                          className="w-full px-3.5 py-2.5 text-xs bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-sans"
+                        >
+                          <option value="proctor">Pengawas Ujian (Proctor)</option>
+                          <option value="admin">Administrator (Guru Utama)</option>
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-3 flex justify-end">
+                        <button
+                          type="submit"
+                          className="py-2.5 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-xs tracking-wide uppercase transition-all shadow-md shadow-emerald-600/10 hover:shadow-lg flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Daftarkan Pengawas
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+              </div>
+
+              {/* List Table of Teachers */}
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-2 border-b border-gray-50">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider font-mono">
+                      Daftar Guru / Pengawas Ujian Aktif
+                    </h3>
+                    <p className="text-[11px] text-gray-400 mt-0.5 font-sans">Menampilkan semua akun guru utama dan pengawas ujian di kelas.</p>
+                  </div>
+                  {/* Search Bar */}
+                  <div className="relative w-full sm:w-80">
+                    <input
+                      type="text"
+                      value={teacherSearch}
+                      onChange={(e) => setTeacherSearch(e.target.value)}
+                      placeholder="Cari nama, username, hak akses..."
+                      className="w-full pl-9 pr-8 py-2 text-xs bg-gray-50 hover:bg-gray-100 focus:bg-white border border-gray-200 focus:border-emerald-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all font-sans"
+                    />
+                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                    {teacherSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setTeacherSearch('')}
+                        className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-650 cursor-pointer font-bold text-xs"
                       >
-                        <option value="proctor">Pengawas Ujian (Proctor)</option>
-                        <option value="admin">Administrator (Guru Utama)</option>
-                      </select>
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-xs tracking-wide uppercase transition-all shadow-md shadow-emerald-600/10 hover:shadow-lg flex items-center justify-center gap-1.5"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Daftarkan Pengawas
-                    </button>
-                  </form>
-                </div>
-
-                {/* List Table of Teachers */}
-                <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 lg:col-span-2">
-                  <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-4 font-mono">
-                    Daftar Guru / Pengawas Ujian Aktif
-                  </h3>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm border-collapse">
-                      <thead>
-                        <tr className="border-b border-gray-150 text-[11px] text-gray-450 uppercase font-mono tracking-wider font-semibold">
-                          <th className="py-3 px-3">Nama Guru / Pengawas</th>
-                          <th className="py-3 px-3">Username</th>
-                          <th className="py-3 px-3">Password (Kunci)</th>
-                          <th className="py-3 px-3">Hak Akses</th>
-                          <th className="py-3 px-3 text-right">Aksi</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100 text-gray-700">
-                        {teachers.length === 0 ? (
-                          <tr>
-                            <td colSpan={5} className="py-6 text-center text-gray-400">
-                              Belum ada akun pengawas ditiap kelas.
-                            </td>
-                          </tr>
-                        ) : (
-                          teachers.map((teach) => (
-                            <tr key={teach.id} className="hover:bg-gray-50/50 transition-colors">
-                              <td className="py-3.5 px-3 align-middle">
-                                <span className="text-gray-800 font-bold block">{teach.name}</span>
-                                <span className="text-[10px] text-gray-400 block font-mono">ID: {teach.id}</span>
-                              </td>
-                              <td className="py-3.5 px-3 align-middle font-mono text-xs">{teach.username}</td>
-                              <td className="py-3.5 px-3 align-middle font-mono text-xs text-gray-600">
-                                <span className="bg-gray-100 px-1.5 py-0.5 rounded font-bold font-mono">{teach.password}</span>
-                              </td>
-                              <td className="py-3.5 px-3 align-middle">
-                                <span
-                                  className={`p-1 px-2.5 text-[10px] rounded-full font-bold uppercase tracking-wider font-sans ${
-                                    teach.role === 'admin'
-                                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-100'
-                                      : 'bg-blue-50 text-blue-800 border border-blue-105'
-                                  }`}
-                                >
-                                  {teach.role === 'admin' ? 'Guru Utama' : 'Pengawas'}
-                                </span>
-                              </td>
-                              <td className="py-3.5 px-3 align-middle text-right whitespace-nowrap">
-                                <div className="flex items-center justify-end gap-2">
-                                  {teach.username !== 'aedia' && teach.username !== 'admin' && teach.username !== 'alam' && teach.name !== 'Aedia Janur' && teach.name !== 'Alam Semesta' ? (
-                                    <>
-                                      <button
-                                        onClick={() => startEditTeacher(teach)}
-                                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-700 hover:text-emerald-850 rounded-xl text-xs font-bold transition-all border border-emerald-100 cursor-pointer shadow-xs"
-                                        title="Edit Guru/Pengawas"
-                                      >
-                                        <Edit className="w-3.5 h-3.5 shrink-0" />
-                                        <span>Edit</span>
-                                      </button>
-                                      <button
-                                        onClick={() => handleDeleteTeacher(teach.id)}
-                                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-50 hover:bg-red-100 active:scale-95 text-red-750 hover:text-red-800 rounded-xl text-xs font-bold transition-all border border-red-100 cursor-pointer shadow-xs"
-                                        title="Hapus Guru/Pengawas"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5 shrink-0" />
-                                        <span>Hapus</span>
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <span className="text-xs text-gray-400 italic px-3 font-semibold text-emerald-650">Bawaan</span>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                        ✕
+                      </button>
+                    )}
                   </div>
                 </div>
 
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-gray-150 text-[11px] text-gray-450 uppercase font-mono tracking-wider font-semibold">
+                        <th className="py-3 px-3">Nama Guru / Pengawas</th>
+                        <th className="py-3 px-3">Username</th>
+                        <th className="py-3 px-3">Password (Kunci)</th>
+                        <th className="py-3 px-3">Hak Akses</th>
+                        <th className="py-3 px-3 text-right">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-gray-700">
+                      {teachers.filter((teach) => {
+                        const s = teacherSearch.toLowerCase();
+                        return teach.name.toLowerCase().includes(s) ||
+                               teach.username.toLowerCase().includes(s) ||
+                               (teach.role === 'admin' ? 'guru utama' : 'pengawas').includes(s);
+                      }).length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-8 text-center text-gray-400 font-sans text-xs">
+                            Tidak ditemukan data guru / pengawas yang cocok dengan kata pencarian Anda.
+                          </td>
+                        </tr>
+                      ) : (
+                        teachers.filter((teach) => {
+                          const s = teacherSearch.toLowerCase();
+                          return teach.name.toLowerCase().includes(s) ||
+                                 teach.username.toLowerCase().includes(s) ||
+                                 (teach.role === 'admin' ? 'guru utama' : 'pengawas').includes(s);
+                        }).map((teach) => (
+                          <tr key={teach.id} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="py-3.5 px-3 align-middle">
+                              <span className="text-gray-800 font-bold block">{teach.name}</span>
+                              <span className="text-[10px] text-gray-400 block font-mono">ID: {teach.id}</span>
+                            </td>
+                            <td className="py-3.5 px-3 align-middle font-mono text-xs">{teach.username}</td>
+                            <td className="py-3.5 px-3 align-middle font-mono text-xs text-gray-600">
+                              <span className="bg-gray-100 px-1.5 py-0.5 rounded font-bold font-mono">{teach.password}</span>
+                            </td>
+                            <td className="py-3.5 px-3 align-middle">
+                              <span
+                                className={`p-1 px-2.5 text-[10px] rounded-full font-bold uppercase tracking-wider font-sans ${
+                                  teach.role === 'admin'
+                                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-100'
+                                    : 'bg-blue-50 text-blue-800 border border-blue-105'
+                                }`}
+                              >
+                                {teach.role === 'admin' ? 'Guru Utama' : 'Pengawas'}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-3 align-middle text-right whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-2">
+                                {teach.username !== 'aedia' && teach.username !== 'admin' && teach.username !== 'alam' && teach.name !== 'Aedia Janur' && teach.name !== 'Ababal Ghussoh, M.Pd.I' && teach.name !== 'Alam Semesta' ? (
+                                  <>
+                                    <button
+                                      onClick={() => startEditTeacher(teach)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-700 hover:text-emerald-850 rounded-xl text-xs font-bold transition-all border border-emerald-100 cursor-pointer shadow-xs"
+                                      title="Edit Guru/Pengawas"
+                                    >
+                                      <Edit className="w-3.5 h-3.5 shrink-0" />
+                                      <span>Edit</span>
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteTeacher(teach.id)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-50 hover:bg-red-100 active:scale-95 text-red-750 hover:text-red-800 rounded-xl text-xs font-bold transition-all border border-red-100 cursor-pointer shadow-xs"
+                                      title="Hapus Guru/Pengawas"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                                      <span>Hapus</span>
+                                    </button>
+                                  </>
+                                ) : (
+                                  <span className="text-xs text-gray-400 italic px-3 font-semibold text-emerald-650">Bawaan</span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
+
             </div>
           )}
 
@@ -3749,10 +4854,30 @@ Kunci: D`}
 
               {/* Live monitoring panel table */}
               <div className="bg-white rounded-3xl border border-gray-100 shadow-xs overflow-hidden">
-                <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div>
                     <h3 className="text-sm font-bold text-gray-800">Daftar Sesi Ujian Berlangsung</h3>
                     <p className="text-[11px] text-gray-400 mt-0.5 font-sans">Siswa terdeteksi sedang membuka, memproses kelas pengerjaan lembar ujian di perangkat mereka.</p>
+                  </div>
+                  {/* Search Bar */}
+                  <div className="relative w-full md:w-85">
+                    <input
+                      type="text"
+                      value={monitoringSearch}
+                      onChange={(e) => setMonitoringSearch(e.target.value)}
+                      placeholder="Cari nama siswa, ujian, kelas..."
+                      className="w-full pl-9 pr-8 py-2 text-xs bg-white border border-gray-200 focus:border-rose-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500/20 transition-all font-sans"
+                    />
+                    <Search className="w-4 h-4 text-gray-450 absolute left-3 top-2.5" />
+                    {monitoringSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setMonitoringSearch('')}
+                        className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-650 cursor-pointer font-bold text-xs"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -3769,17 +4894,27 @@ Kunci: D`}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-sm">
-                      {activeSessions.length === 0 ? (
+                      {activeSessions.filter((session) => {
+                        const s = monitoringSearch.toLowerCase();
+                        return (session.studentName || '').toLowerCase().includes(s) ||
+                               (session.examTitle || '').toLowerCase().includes(s) ||
+                               (session.classGroup || '').toLowerCase().includes(s);
+                      }).length === 0 ? (
                         <tr>
                           <td colSpan={6} className="py-12 text-center text-gray-400">
                             <span className="flex flex-col items-center gap-2">
                               <Radio className="w-10 h-10 text-rose-200 animate-pulse" />
-                              <span className="text-xs font-semibold text-gray-450">Tidak ada siswa yang sedang aktif dalam pengerjaan ujian saat ini.</span>
+                              <span className="text-xs font-semibold text-gray-450">Tidak ada sesi ujian berlangsung yang cocok dengan pencarian Anda.</span>
                             </span>
                           </td>
                         </tr>
                       ) : (
-                        activeSessions.map((session) => {
+                        activeSessions.filter((session) => {
+                          const s = monitoringSearch.toLowerCase();
+                          return (session.studentName || '').toLowerCase().includes(s) ||
+                                 (session.examTitle || '').toLowerCase().includes(s) ||
+                                 (session.classGroup || '').toLowerCase().includes(s);
+                        }).map((session) => {
                           const total = session.totalQuestions || 0;
                           const answered = session.answeredCount || 0;
                           const unanswered = session.unansweredCount || 0;
@@ -4252,14 +5387,10 @@ Kunci: D`}
                 <input
                   type="text"
                   required
-                  disabled={editingStudent.username === 'janur' || editingStudent.id === 'user_1'}
                   value={editStudentName}
                   onChange={(e) => setEditStudentName(e.target.value)}
-                  className="w-full p-2.5 bg-white disabled:bg-gray-100 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-650 transition-all font-sans"
+                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-650 transition-all font-sans"
                 />
-                {(editingStudent.username === 'janur' || editingStudent.id === 'user_1') && (
-                  <span className="text-[9px] text-gray-400 block mt-1 leading-normal font-sans">Nama siswa utama bersifat permanen dan tidak bisa diubah.</span>
-                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -4328,14 +5459,10 @@ Kunci: D`}
                   <input
                     type="text"
                     required
-                    disabled={editingStudent.username === 'janur' || editingStudent.id === 'user_1'}
                     value={editStudentUser}
                     onChange={(e) => setEditStudentUser(e.target.value)}
-                    className="w-full p-2.5 bg-white disabled:bg-gray-100 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-650 transition-all font-sans font-mono"
+                    className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-650 transition-all font-sans font-mono"
                   />
-                  {(editingStudent.username === 'janur' || editingStudent.id === 'user_1') && (
-                    <span className="text-[9px] text-gray-400 block mt-1 leading-normal font-sans">Username siswa utama bersifat permanen dan tidak bisa diubah.</span>
-                  )}
                 </div>
 
                 <div>
@@ -4405,12 +5532,12 @@ Kunci: D`}
                 <input
                   type="text"
                   required
-                  disabled={editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Alam Semesta'}
+                  disabled={editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Ababal Ghussoh, M.Pd.I' || editingTeacher.name === 'Alam Semesta'}
                   value={editTeacherName}
                   onChange={(e) => setEditTeacherName(e.target.value)}
                   className="w-full p-2.5 bg-white disabled:bg-gray-100 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-650 transition-all font-sans"
                 />
-                {(editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Alam Semesta') && (
+                {(editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Ababal Ghussoh, M.Pd.I' || editingTeacher.name === 'Alam Semesta') && (
                   <span className="text-[9px] text-gray-400 block mt-1 leading-normal font-sans">Nama akun permanen dikunci demi keamanan sistem.</span>
                 )}
               </div>
@@ -4423,12 +5550,12 @@ Kunci: D`}
                   <input
                     type="text"
                     required
-                    disabled={editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Alam Semesta'}
+                    disabled={editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Ababal Ghussoh, M.Pd.I' || editingTeacher.name === 'Alam Semesta'}
                     value={editTeacherUser}
                     onChange={(e) => setEditTeacherUser(e.target.value)}
                     className="w-full p-2.5 bg-white disabled:bg-gray-100 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-650 transition-all font-mono"
                   />
-                  {(editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Alam Semesta') && (
+                  {(editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Ababal Ghussoh, M.Pd.I' || editingTeacher.name === 'Alam Semesta') && (
                     <span className="text-[9px] text-gray-400 block mt-1 leading-normal font-sans">Username akun permanen dikunci demi keamanan sistem.</span>
                   )}
                 </div>
@@ -4452,7 +5579,7 @@ Kunci: D`}
                   Hak Akses (Role)
                 </label>
                 <select
-                  disabled={editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Alam Semesta'}
+                  disabled={editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Ababal Ghussoh, M.Pd.I' || editingTeacher.name === 'Alam Semesta'}
                   value={editTeacherRole}
                   onChange={(e) => setEditTeacherRole(e.target.value as 'admin' | 'proctor')}
                   className="w-full p-2.5 bg-white disabled:bg-gray-100 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-650 transition-all font-sans font-medium"
@@ -4460,7 +5587,7 @@ Kunci: D`}
                   <option value="proctor">Pengawas Ujian (Proctor)</option>
                   <option value="admin">Administrator (Guru Utama)</option>
                 </select>
-                {(editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Alam Semesta') && (
+                {(editingTeacher.username === 'admin' || editingTeacher.username === 'aedia' || editingTeacher.username === 'alam' || editingTeacher.name === 'Aedia Janur' || editingTeacher.name === 'Ababal Ghussoh, M.Pd.I' || editingTeacher.name === 'Alam Semesta') && (
                   <span className="text-[9px] text-gray-400 block mt-1 leading-normal font-sans">Hak akses akun permanen dilindungi oleh sistem.</span>
                 )}
               </div>
@@ -4890,5 +6017,115 @@ Kunci: D`}
         </div>
       )}
     </div>
-  );
+
+    {/* Hidden print container that ONLY appears during browser PRINT */}
+    <div className="hidden print:block print:p-0 bg-white min-h-screen text-black font-sans leading-normal">
+      <div className="mx-auto max-w-[1024px]">
+        {/* Loop over selected students and render cards in a beautiful 2-column grid layout */}
+        <div className="grid grid-cols-2 gap-x-6 gap-y-8">
+          {students.filter(std => printSelectedStudentIds.includes(std.id)).map((std, index) => (
+            <div 
+              key={std.id}
+              className="border-[1.5px] border-emerald-950 rounded-xl bg-white p-5 flex flex-col justify-between relative overflow-hidden"
+              style={{ 
+                height: printShowKop ? '240px' : '182px',
+                pageBreakInside: 'avoid',
+                WebkitPrintColorAdjust: 'exact',
+                printColorAdjust: 'exact'
+              }}
+            >
+              
+              {/* Official Head/Kop */}
+              {printShowKop && (
+                <div className="flex items-center gap-2.5 pb-2 border-b-[1.5px] border-emerald-800">
+                  <div className="w-10 h-10 rounded-full border border-emerald-800 p-[1.5px] bg-white flex items-center justify-center shrink-0">
+                    {logoImg ? (
+                      <img src={logoImg} className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-full h-full rounded-full bg-emerald-700 text-white flex items-center justify-center font-bold text-xs shrink-0 font-mono">MA</div>
+                    )}
+                  </div>
+                  <div className="leading-tight flex-1 text-center pr-10">
+                    <h5 className="text-[8px] font-bold text-emerald-950 tracking-wider">Kementerian Agama Republik Indonesia</h5>
+                    <h6 className="text-[11.5px] font-black text-gray-901 uppercase tracking-widest mt-0.5">MA ANNURIYYAH</h6>
+                    <p className="text-[8px] text-gray-500 font-sans font-extrabold mt-0.5">Asesmen Madrasah (AM) Berbasis CBT</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Card Body Contents */}
+              <div className="mt-3.5 grid grid-cols-5 gap-3 text-xs flex-1">
+                
+                {/* Participant Data (Left Side) */}
+                <div className="col-span-3.5 space-y-1.5 text-gray-800 leading-tight">
+                  <table className="w-full text-left text-[10px] border-collapse font-sans">
+                    <tbody>
+                      <tr>
+                        <td className="py-0.5 font-bold text-gray-400 w-22 uppercase tracking-wider text-[7.5px]">Sesi Ujian</td>
+                        <td className="py-0.5 text-gray-950 font-mono font-bold">: {printDefaultSession}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-0.5 font-bold text-gray-400 w-22 uppercase tracking-wide text-[7.5px]">NISN / UID</td>
+                        <td className="py-0.5 font-mono font-black text-gray-950">: {std.nisn}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-0.5 font-bold text-gray-400 w-22 uppercase tracking-wide text-[7.5px]">Nama Siswa</td>
+                        <td className="py-0.5 font-black uppercase text-emerald-900 text-[11px] truncate max-w-[160px]">: {std.name}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-0.5 font-bold text-gray-400 w-22 uppercase tracking-wide text-[7.5px]">Kelas / Ruang</td>
+                        <td className="py-0.5 font-bold text-gray-850 truncate max-w-[160px]">: {std.classGroup} / {printDefaultRoom}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* Kredensial Box */}
+                  <div className="bg-gray-50 border border-gray-250 rounded-lg p-2 text-[9px] grid grid-cols-2 gap-1.5 mt-2.5 font-sans">
+                    <div className="border-r border-gray-200 pr-1.5">
+                      <span className="text-[7px] uppercase font-bold text-gray-400 block tracking-widest">Username</span>
+                      <code className="font-mono text-emerald-800 font-extrabold block bg-emerald-50 rounded px-1.5 py-0.5 text-center mt-0.5 text-[10px]">{std.username}</code>
+                    </div>
+                    <div className="pl-1.5">
+                      <span className="text-[7px] uppercase font-bold text-gray-400 block tracking-widest">Sandi Login</span>
+                      <code className="font-mono text-gray-850 font-bold block bg-gray-100 rounded px-1.5 py-0.5 text-center mt-0.5 text-[10px]">{std.password || '123456'}</code>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Photo & Signature (Right Side) */}
+                <div className="col-span-1.5 flex flex-col justify-between items-center text-center">
+                  {printShowPhotoPlaceholder ? (
+                    <div className="w-[42px] h-[55px] border border-emerald-800/30 rounded-sm flex flex-col justify-center items-center bg-white p-[1px] overflow-hidden" style={{ pageBreakInside: 'avoid' }}>
+                      {logoImg ? (
+                        <img src={logoImg} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                      ) : (
+                        <span className="text-[6px] uppercase font-bold leading-none font-mono text-gray-400">3x4</span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="h-6"></div>
+                  )}
+
+                  {/* Principal signature block */}
+                  {printShowTtd && (
+                    <div className="text-[6.5px] text-gray-700 leading-tight w-full mt-1.5 font-sans">
+                      <span className="block font-bold">Panitia Pelaksana,</span>
+                      <span className="block italic text-gray-300 my-1 font-mono text-[5px]">(Ttd & Cap)</span>
+                      <span className="block font-black underline text-emerald-950 mt-0.5 truncate">{printPrincipal}</span>
+                      {printNip && printNip.trim() !== '' && printNip.trim() !== '-' && (
+                        <span className="block text-gray-400 truncate text-[5.8px]">NIP. {printNip}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </>
+);
 }

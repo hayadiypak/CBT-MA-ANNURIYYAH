@@ -5,9 +5,9 @@ export const defaultStudents: Student[] = [
     id: 'user_1',
     username: 'janur',
     name: 'Ahmad Jaannuruzaki A',
-    nisn: '202611001',
+    nisn: '1922',
     gender: 'Laki-laki',
-    classGroup: 'XII IPA 1',
+    classGroup: 'X',
     password: '123'
   },
   {
@@ -251,7 +251,7 @@ export const defaultExams: Exam[] = [
   },
   {
     id: 'exam_3',
-    title: 'Asesmen Lingkup Materi - Bahasa Indonesia',
+    title: 'Asesmen Capaian Belajar Tahunan',
     subject: 'Bahasa Indonesia',
     durationMinutes: 20,
     token: 'INDOKB',
@@ -326,8 +326,8 @@ export const defaultResults: ExamResult[] = [
     id: 'res_1',
     studentId: 'user_1',
     studentName: 'Ahmad Jaannuruzaki A',
-    studentNisn: '202611001',
-    classGroup: 'XII IPA 1',
+    studentNisn: '1922',
+    classGroup: 'X',
     examId: 'exam_1',
     examTitle: 'Penilaian Akhir Semester (PAS) Fiqih XII',
     examSubject: 'Fiqih',

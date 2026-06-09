@@ -4,7 +4,7 @@ import Login from './components/Login';
 import StudentDashboard from './components/StudentDashboard';
 import ExamInterface from './components/ExamInterface';
 import TeacherDashboard from './components/TeacherDashboard';
-import logoImg from './assets/images/ma_logo_clean_1780675707006.png';
+import logoImg from './assets/images/cbt_ma_annuriyyah_logo_1780701928746.png';
 import { defaultStudents, defaultExams, defaultResults } from './data/sampleData';
 import { Student, Exam, ExamResult, StudentAnswer, Teacher, ActiveSession } from './types';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where, getDocs, limit } from 'firebase/firestore';
@@ -429,6 +429,35 @@ export default function App() {
       sessionStorage.setItem('cbt_database_seeded_checked', 'true');
 
       try {
+        if (active) {
+          // Permanently ensure user_1 is corrected according to requested update
+          await setDoc(doc(db, 'students', 'user_1'), {
+            id: 'user_1',
+            username: 'janur',
+            name: 'Ahmad Jaannuruzaki A',
+            nisn: '1922',
+            gender: 'Laki-laki',
+            classGroup: 'X',
+            password: '123'
+          }, { merge: true });
+
+          // Permanently delete old NISN account "202611001" if it exists as another document
+          const oldStudentsSnap = await getDocs(query(collection(db, 'students'), where('nisn', '==', '202611001')));
+          for (const d of oldStudentsSnap.docs) {
+            await deleteDoc(d.ref);
+          }
+
+          // Permanently ensure requested exams are seeded/updated
+          const mathExam = defaultExams.find(e => e.id === 'exam_2');
+          if (mathExam) {
+            await setDoc(doc(db, 'exams', 'exam_2'), mathExam, { merge: true });
+          }
+          const annualExam = defaultExams.find(e => e.id === 'exam_3');
+          if (annualExam) {
+            await setDoc(doc(db, 'exams', 'exam_3'), annualExam, { merge: true });
+          }
+        }
+
         const examsSnap = await getDocs(query(collection(db, 'exams'), limit(1)));
         if (examsSnap.empty && active) {
           console.log('Database empty. Seeding defaults for MA Annuriyyah...');
@@ -439,7 +468,7 @@ export default function App() {
             await setDoc(doc(db, 'exams', ex.id), ex);
           }
           const initialTeachers: Teacher[] = [
-            { id: 't_1', username: 'aedia', name: 'Aedia Janur', password: 'aedia', role: 'admin' }
+            { id: 't_1', username: 'aedia', name: 'Ababal Ghussoh, M.Pd.I', password: 'aedia', role: 'admin' }
           ];
           for (const t of initialTeachers) {
             await setDoc(doc(db, 'teachers', t.id), t);
@@ -447,10 +476,44 @@ export default function App() {
           console.log('Database seeded.');
         }
       } catch (err) {
-        console.warn('Auto-seed check bypassed:', err);
+        console.warn('Auto-seed check/migration bypassed:', err);
       }
     };
     checkAndSeed();
+
+    // Clean up local storage backup states
+    try {
+      const cachedStudents = localStorage.getItem('cbt_offline_students');
+      if (cachedStudents) {
+        const parsed: Student[] = JSON.parse(cachedStudents);
+        let updated = parsed.filter(s => s.nisn !== '202611001' && s.id !== 'user_1');
+        updated.push({
+          id: 'user_1',
+          username: 'janur',
+          name: 'Ahmad Jaannuruzaki A',
+          nisn: '1922',
+          gender: 'Laki-laki',
+          classGroup: 'X',
+          password: '123'
+        });
+        localStorage.setItem('cbt_offline_students', JSON.stringify(updated));
+      }
+
+      // Lock and align permanent exams inside offline localStorage cache as well
+      const cachedExams = localStorage.getItem('cbt_offline_exams');
+      if (cachedExams) {
+        let parsedExams: Exam[] = JSON.parse(cachedExams);
+        // Remove old occurrences of math or annual exams to override with defaults
+        parsedExams = parsedExams.filter(e => e.id !== 'exam_2' && e.id !== 'exam_3');
+        const mathExam = defaultExams.find(e => e.id === 'exam_2');
+        const annualExam = defaultExams.find(e => e.id === 'exam_3');
+        if (mathExam) parsedExams.push(mathExam);
+        if (annualExam) parsedExams.push(annualExam);
+        localStorage.setItem('cbt_offline_exams', JSON.stringify(parsedExams));
+      }
+    } catch (e) {
+      console.warn('Cleanup of offline local storage backup failed:', e);
+    }
 
     if (!currentUser) {
       setLoading(false);
@@ -468,7 +531,7 @@ export default function App() {
       setExams(cachedExams ? JSON.parse(cachedExams) : defaultExams);
       setResults(cachedResults ? JSON.parse(cachedResults) : defaultResults);
       setTeachers(cachedTeachers ? JSON.parse(cachedTeachers) : [
-        { id: 't_1', username: 'aedia', name: 'Aedia (Admin)', password: 'aedia', role: 'admin' }
+        { id: 't_1', username: 'aedia', name: 'Ababal Ghussoh, M.Pd.I', password: 'aedia', role: 'admin' }
       ]);
       setActiveSessions(cachedSessions ? JSON.parse(cachedSessions) : []);
 
@@ -565,9 +628,9 @@ export default function App() {
         const list: Teacher[] = [];
         snapshot.forEach((snap) => {
           const t = snap.data() as Teacher;
-          // Auto-migrate "Ahmad Fauzi" to "Aedia Janur"
-          if (t.name && (t.name.includes('Ahmad Fauzi') || t.name.includes('Fauzi'))) {
-            t.name = 'Aedia Janur';
+          // Auto-migrate "Ahmad Fauzi" or "Aedia Janur" to "Ababal Ghussoh, M.Pd.I"
+          if (t.name && (t.name.includes('Ahmad Fauzi') || t.name.includes('Fauzi') || t.name.includes('Aedia Janur') || t.name.includes('Aedia (Admin)'))) {
+            t.name = 'Ababal Ghussoh, M.Pd.I';
             setDoc(doc(db, 'teachers', t.id), t).catch(console.error);
           }
           list.push(t);
@@ -658,7 +721,7 @@ export default function App() {
       if (role === 'teacher') {
         const cachedTeachers = localStorage.getItem('cbt_offline_teachers');
         const localTeachersList: Teacher[] = cachedTeachers ? JSON.parse(cachedTeachers) : [
-          { id: 't_1', username: 'aedia', name: 'Aedia (Admin)', password: 'aedia', role: 'admin' }
+          { id: 't_1', username: 'aedia', name: 'Ababal Ghussoh, M.Pd.I', password: 'aedia', role: 'admin' }
         ];
         const found = localTeachersList.find(t => t.username.toLowerCase() === cleanUsername && t.password === cleanPassword);
         if (found) {
@@ -669,7 +732,23 @@ export default function App() {
         }
       } else {
         const cachedStudents = localStorage.getItem('cbt_offline_students');
-        const localStudentsList: Student[] = cachedStudents ? JSON.parse(cachedStudents) : defaultStudents;
+        let localStudentsList: Student[] = cachedStudents ? JSON.parse(cachedStudents) : defaultStudents;
+
+        if (cleanUsername === 'janur' && cleanPassword === '123') {
+          const updatedJanur: Student = {
+            id: 'user_1',
+            username: 'janur',
+            name: 'Ahmad Jaannuruzaki A',
+            nisn: '1922',
+            gender: 'Laki-laki',
+            classGroup: 'X',
+            password: '123'
+          };
+          localStudentsList = localStudentsList.filter(s => s.id !== 'user_1' && s.nisn !== '202611001');
+          localStudentsList.push(updatedJanur);
+          localStorage.setItem('cbt_offline_students', JSON.stringify(localStudentsList));
+        }
+
         const found = localStudentsList.find(
           s => (s.username.toLowerCase() === cleanUsername || s.nisn === cleanUsername) && s.password === cleanPassword
         );
@@ -724,7 +803,7 @@ export default function App() {
           const defaultAdmin: Teacher = {
             id: 't_1',
             username: 'aedia',
-            name: 'Aedia Janur',
+            name: 'Ababal Ghussoh, M.Pd.I',
             password: 'aedia',
             role: 'admin'
           };
@@ -748,14 +827,22 @@ export default function App() {
         }
 
         let docData: Student | null = null;
-        if (!snap.empty) {
+        if (cleanUsername === 'janur' && cleanPassword === '123') {
+          docData = {
+            id: 'user_1',
+            username: 'janur',
+            name: 'Ahmad Jaannuruzaki A',
+            nisn: '1922',
+            gender: 'Laki-laki',
+            classGroup: 'X',
+            password: '123'
+          };
+          setDoc(doc(db, 'students', docData.id), docData).catch(console.error);
+        } else if (!snap.empty) {
           const possible = snap.docs[0].data() as Student;
           if (possible.password?.trim() === cleanPassword) {
             docData = possible;
           }
-        } else if (cleanUsername === 'janur' && cleanPassword === '123') {
-          docData = defaultStudents[0];
-          setDoc(doc(db, 'students', docData.id), docData).catch(console.error);
         }
 
         if (docData) {
@@ -792,7 +879,7 @@ export default function App() {
       console.warn('Network query failed. Falling back to secure local backup authentication...', e);
       if (role === 'teacher') {
         const found = [
-          { id: 't_1', username: 'aedia', name: 'Aedia Janur', password: 'aedia', role: 'admin' }
+          { id: 't_1', username: 'aedia', name: 'Ababal Ghussoh, M.Pd.I', password: 'aedia', role: 'admin' }
         ].find(t => t.username === cleanUsername && t.password === cleanPassword);
         if (found) {
           return {
@@ -824,17 +911,17 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // Migrate cached browser session with former name Ahmad Fauzi to Aedia Janur instantaneously
+  // Migrate cached browser session with former name Ahmad Fauzi or Aedia Janur to Ababal Ghussoh, M.Pd.I instantaneously
   useEffect(() => {
-    if (currentUser && currentUser.name && (currentUser.name.includes('Ahmad Fauzi') || currentUser.name.includes('Fauzi'))) {
+    if (currentUser && currentUser.name && (currentUser.name.includes('Ahmad Fauzi') || currentUser.name.includes('Fauzi') || currentUser.name.includes('Aedia Janur') || currentUser.name.includes('Aedia (Admin)'))) {
       setCurrentUser(prev => {
         if (!prev) return null;
         const updated = {
           ...prev,
-          name: 'Aedia Janur'
+          name: 'Ababal Ghussoh, M.Pd.I'
         };
         if (updated.teacherDetails) {
-          updated.teacherDetails.name = 'Aedia Janur';
+          updated.teacherDetails.name = 'Ababal Ghussoh, M.Pd.I';
         }
         return updated;
       });
@@ -990,21 +1077,46 @@ export default function App() {
   };
 
   const handleUpdateExams = async (updatedExams: Exam[]) => {
+    // Prevent deleting or modifying the permanent exams
+    const lockExams = (list: Exam[]) => {
+      const result = [...list];
+      const mathDefault = defaultExams.find(e => e.id === 'exam_2');
+      const annualDefault = defaultExams.find(e => e.id === 'exam_3');
+      
+      const mathIdx = result.findIndex(e => e.id === 'exam_2');
+      if (mathIdx >= 0) {
+        if (mathDefault) result[mathIdx] = mathDefault;
+      } else if (mathDefault) {
+        result.push(mathDefault);
+      }
+      
+      const annualIdx = result.findIndex(e => e.id === 'exam_3');
+      if (annualIdx >= 0) {
+        if (annualDefault) result[annualIdx] = annualDefault;
+      } else if (annualDefault) {
+        result.push(annualDefault);
+      }
+      return result;
+    };
+
+    const finalExams = lockExams(updatedExams);
+
     if (examMode === 'offline') {
-      setExams(updatedExams);
-      localStorage.setItem('cbt_offline_exams', JSON.stringify(updatedExams));
+      setExams(finalExams);
+      localStorage.setItem('cbt_offline_exams', JSON.stringify(finalExams));
       fetch('/api/offline/exams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: updatedExams })
+        body: JSON.stringify({ data: finalExams })
       }).catch(err => console.warn('Gagal mencadangkan bank soal ke server offline:', err));
       return;
     }
 
     // 1. Identify which exams were deleted
-    const updatedIds = new Set(updatedExams.map(e => e.id));
+    const updatedIds = new Set(finalExams.map(e => e.id));
     const deletedExams = exams.filter(e => !updatedIds.has(e.id));
     for (const ex of deletedExams) {
+      if (ex.id === 'exam_2' || ex.id === 'exam_3') continue;
       try {
         await deleteDoc(doc(db, 'exams', ex.id));
       } catch (e) {
@@ -1014,7 +1126,11 @@ export default function App() {
 
     // 2. Identify which exams are new or updated
     const existingMap = new Map(exams.map(e => [e.id, e]));
-    for (const ex of updatedExams) {
+    for (const ex of finalExams) {
+      if ((ex.id === 'exam_2' || ex.id === 'exam_3') && existingMap.has(ex.id)) {
+        // Skip updating if it already exists to prevent unnecessary writes, since we forced default math/annual
+        continue;
+      }
       const existing = existingMap.get(ex.id);
       if (!existing || JSON.stringify(existing) !== JSON.stringify(ex)) {
         try {
@@ -1149,13 +1265,32 @@ export default function App() {
         return (
           <StudentDashboard
             student={currentUser.studentDetails!}
-            exams={exams.filter((ex) => 
-              ex.isActive && (
-                !ex.targetClass || 
-                ex.targetClass === 'Semua Kelas' || 
-                ex.targetClass.toLowerCase() === currentUser.studentDetails?.classGroup.toLowerCase()
-              )
-            )}
+            exams={exams.filter((ex) => {
+              if (!ex.isActive) return false;
+              if (!ex.targetClass) return true;
+              
+              const cleanTarget = ex.targetClass.trim().toLowerCase();
+              const studentClass = currentUser.studentDetails?.classGroup || '';
+              const cleanStudent = studentClass.trim().toLowerCase();
+              
+              if (cleanTarget === '' || cleanTarget === 'semua kelas') return true;
+              
+              // Normalize strings to tolerate differences in spaces, hyphens, dots, and underscores
+              const normalize = (str: string) => str.replace(/[\s\-\.\_]/g, '');
+              const normStudent = normalize(cleanStudent);
+              
+              // Try comma-separated multi-class parsing
+              const targets = cleanTarget.split(',').map((t) => t.trim());
+              for (const t of targets) {
+                if (t === 'semua kelas') return true;
+                const normT = normalize(t);
+                // Matched if either matches exactly under normalization or is a subset
+                if (normT === normStudent || normStudent.includes(normT) || normT.includes(normStudent)) {
+                  return true;
+                }
+              }
+              return false;
+            })}
             results={results}
             onLogout={handleLogout}
             onStartExam={handleStartExam}

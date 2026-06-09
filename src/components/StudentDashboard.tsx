@@ -1,8 +1,8 @@
 import { useState, FormEvent } from 'react';
-import { LogOut, BookOpen, Clock, ShieldCheck, HelpCircle, CheckCircle, Award, Download, Copy } from 'lucide-react';
+import { LogOut, BookOpen, Clock, ShieldCheck, HelpCircle, CheckCircle, Award, Download, Copy, AlertTriangle } from 'lucide-react';
 import { Student, Exam, ExamResult } from '../types';
 // @ts-ignore
-import logoImg from '../assets/images/ma_logo_clean_1780675707006.png';
+import logoImg from '../assets/images/cbt_ma_annuriyyah_logo_1780701928746.png';
 
 interface StudentDashboardProps {
   student: Student;
@@ -24,6 +24,8 @@ export default function StudentDashboard({
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [typedToken, setTypedToken] = useState('');
   const [tokenError, setTokenError] = useState<string | null>(null);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [isClassDeclared, setIsClassDeclared] = useState(false);
 
   // Helper to package & download student's offline exam result as a JSON file
   const handleDownloadOfflineResult = (res: ExamResult) => {
@@ -67,7 +69,8 @@ export default function StudentDashboard({
     if (!selectedExam) return;
 
     if (typedToken.trim().toUpperCase() === selectedExam.token.toUpperCase()) {
-      onStartExam(selectedExam);
+      setShowConfirmation(true);
+      setIsClassDeclared(false);
     } else {
       setTokenError(`Token Ujian tidak valid. Periksa papan tulis atau info token.`);
     }
@@ -348,6 +351,108 @@ export default function StudentDashboard({
 
         </div>
       </main>
+
+      {/* Safety Gate Confirmation Modal */}
+      {showConfirmation && selectedExam && (
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-150 animate-scale-up space-y-5">
+            <div className="flex items-center gap-3 text-amber-600 border-b border-gray-100 pb-3">
+              <div className="p-2 bg-amber-50 rounded-xl">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h4 className="text-base font-bold text-gray-800">⚠️ Gerbang Keamanan Akun & Kelas</h4>
+                <p className="text-[11px] text-gray-400 font-mono">Exam Target Guard & Anti-Accident State</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs text-gray-600 leading-relaxed font-sans">
+                Sebelum masuk dan memulai pengerjaan lembar soal, dilarang keras salah memilih ujian kelompok kelas lain <strong>(Kelas Atas atau Kelas Bawah)</strong>. Hasil ujian yang dikerjakan pada kelas yang salah <strong>tidak akan terekam/dinilai</strong> pada daftar prodi Anda.
+              </p>
+
+              {/* Comparative Matrix card */}
+              <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 space-y-2.5 font-sans">
+                <div className="grid grid-cols-2 gap-4 text-xs font-sans">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Identitas Anda</span>
+                    <div className="bg-white p-2 rounded-xl border border-gray-150 font-semibold text-gray-750">
+                      👤 {student.name}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-emerald-600 block mb-0.5">Kelas Terdaftar Anda</span>
+                    <div className="bg-emerald-50 text-emerald-800 p-2 rounded-xl border border-emerald-200 font-extrabold text-center text-sm">
+                      📍 {student.classGroup}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-150 my-2 pt-2 font-sans">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Mata Ujian yang Dipilih</span>
+                  <div className="bg-amber-50/50 p-2 rounded-xl border border-amber-100 text-gray-800">
+                    <div className="font-bold text-xs text-amber-950">📝 {selectedExam.title}</div>
+                    <div className="text-[11px] font-medium text-amber-800 mt-1 flex items-center gap-1.5">
+                      <span className="px-1.5 py-0.5 bg-amber-100/80 text-amber-900 rounded font-bold text-[9px] uppercase">
+                        Target Kelas Ujian: {selectedExam.targetClass || 'Semua Kelas'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Strict matching check banner */}
+              {selectedExam.targetClass && 
+               selectedExam.targetClass !== 'Semua Kelas' && 
+               selectedExam.targetClass.toLowerCase() !== student.classGroup.toLowerCase() ? (
+                <div className="p-3 bg-red-55/60 border border-red-200 rounded-xl text-xs text-red-750 leading-relaxed font-sans font-medium flex gap-2">
+                  <span className="text-base shrink-0">⚠️</span>
+                  <span><strong>PERINGATAN KERAS:</strong> Kelas target ujian ini adalah <strong>{selectedExam.targetClass}</strong>, sedangkan Anda berada di kelas <strong>{student.classGroup}</strong>. Anda tidak disarankan melanjutkan!</span>
+                </div>
+              ) : (
+                <div className="p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl text-xs text-emerald-850 leading-relaxed font-sans flex gap-2">
+                  <span className="text-base shrink-0">✔️</span>
+                  <span><strong>VERIFIKASI AMAN:</strong> Kelompok kelas Anda ({student.classGroup}) terpantau sesuai dengan target mata ujian ini.</span>
+                </div>
+              )}
+
+              {/* Declarative Compliance Checkbox */}
+              <label className="flex items-start gap-2.5 p-3.5 bg-gray-50/40 border border-gray-150 rounded-2xl hover:bg-gray-50 cursor-pointer select-none transition-all">
+                <input
+                  type="checkbox"
+                  checked={isClassDeclared}
+                  onChange={(e) => setIsClassDeclared(e.target.checked)}
+                  className="mt-0.5 rounded border-gray-350 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                />
+                <span className="text-xs text-gray-700 font-sans leading-relaxed">
+                  Saya menyatakan dengan sadar dan jujur bahwa <strong>{student.name} ({student.classGroup})</strong> adalah benar data nama saya, dan ujian <strong>{selectedExam.title}</strong> adalah mata ujian resmi yang dijadwalkan untuk kelas saya hari ini.
+                </span>
+              </label>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                disabled={!isClassDeclared}
+                onClick={() => {
+                  setShowConfirmation(false);
+                  onStartExam(selectedExam);
+                }}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:text-gray-400 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-all shadow-md shadow-emerald-600/10"
+              >
+                Paham &amp; Mulai Kerjakan
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowConfirmation(false)}
+                className="py-3 px-5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-xl transition-all"
+              >
+                Kembali / Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

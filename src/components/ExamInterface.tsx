@@ -4,7 +4,7 @@ import { Exam, StudentAnswer, Student } from '../types';
 import { doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 // @ts-ignore
-import logoImg from '../assets/images/ma_logo_clean_1780675707006.png';
+import logoImg from '../assets/images/cbt_ma_annuriyyah_logo_1780701928746.png';
 
 // Helper function to check if a question is an essay question (with robust fallback checking)
 const isQuestionEssay = (q: any): boolean => {
